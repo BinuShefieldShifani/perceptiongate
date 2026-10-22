@@ -13,13 +13,16 @@ dist/
 build/
 
 # Data and artifacts (never committed; tracked with DVC later)
-data/
-runs/
-mlruns/
-artifacts/
+/data/
+/runs/
+/mlruns/
+/artifacts/
 *.pt
 *.onnx
 
 # Secrets
 .env
 kaggle.json
+
+# macOS
+.DS_Store

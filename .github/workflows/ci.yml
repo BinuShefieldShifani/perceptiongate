@@ -47,3 +47,7 @@ jobs:
       - name: Validate all experiment configs
         run: |
           for f in configs/experiments/*.yaml; do pgate validate-config "$f"; done
+      - name: Verify committed dataset manifests
+        run: |
+          shopt -s nullglob
+          for m in manifests/*/; do pgate data verify-manifest "$m"; done

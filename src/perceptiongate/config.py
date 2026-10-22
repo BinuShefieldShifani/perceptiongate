@@ -2,6 +2,9 @@
 
 Every run is described by one YAML file. Loading it through these models means a typo
 or a bad value fails immediately, before any GPU time is spent.
+
+Machine-specific paths (where the raw dataset lives on Kaggle or your laptop) are NOT in
+the config. They are passed on the command line, so the same config works everywhere.
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+StratumKey = Literal["timeofday", "weather", "scene"]
+
 
 class StrictModel(BaseModel):
     """Base model that rejects unknown keys, so misspelled settings are caught."""
@@ -19,12 +24,22 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class DataConfig(StrictModel):
-    root: Path = Path("data/bdd100k_subset")
+class SamplingConfig(StrictModel):
     train_images: int = Field(gt=0)
     val_images: int = Field(gt=0)
+    strata: list[StratumKey] = Field(default=["timeofday", "weather"], min_length=1)
+    min_per_stratum: int = Field(default=50, ge=0)
+    require_objects: bool = True
+
+
+class DataConfig(StrictModel):
+    manifest: Path = Path("manifests/bdd100k-v1")
     classes: list[str] = Field(min_length=1)
+    image_width: int = Field(default=1280, gt=0)
+    image_height: int = Field(default=720, gt=0)
     image_size: int = Field(default=640, ge=32)
+    max_invalid_box_fraction: float = Field(default=0.005, ge=0, le=1)
+    sampling: SamplingConfig
     seed: int = 42
 
     @field_validator("classes")
