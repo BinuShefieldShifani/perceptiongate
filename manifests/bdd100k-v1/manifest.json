@@ -1,0 +1,78 @@
+{
+  "meta": {
+    "classes": [
+      "car",
+      "truck",
+      "bus",
+      "pedestrian",
+      "rider",
+      "bicycle",
+      "motorcycle",
+      "traffic_light",
+      "traffic_sign"
+    ],
+    "sampling": {
+      "min_per_stratum": 50,
+      "require_objects": true,
+      "strata": [
+        "timeofday",
+        "weather"
+      ],
+      "train_images": 10000,
+      "val_images": 2000
+    },
+    "seed": 42,
+    "source_labels": {
+      "train": "bdd100k_labels_images_train.json",
+      "val": "bdd100k_labels_images_val.json"
+    }
+  },
+  "splits": {
+    "train": {
+      "boxes": 184116,
+      "file": "train.csv",
+      "images": 10000,
+      "sha256": "e608980c6e1a33d60122129499ff345ae1539fc509a3486961bb1ff53bbc274b",
+      "small_boxes": 101564,
+      "timeofday": {
+        "dawn/dusk": 924,
+        "daytime": 5068,
+        "night": 3933,
+        "undefined": 75
+      },
+      "vru_boxes": 15234,
+      "weather": {
+        "clear": 4981,
+        "foggy": 115,
+        "overcast": 1268,
+        "partly cloudy": 762,
+        "rainy": 797,
+        "snowy": 851,
+        "undefined": 1226
+      }
+    },
+    "val": {
+      "boxes": 36438,
+      "file": "val.csv",
+      "images": 2000,
+      "sha256": "36eb63bf0fc8c61560f66c9158ac6ec2679495807487f917f872c2d8b4193b0e",
+      "small_boxes": 20115,
+      "timeofday": {
+        "dawn/dusk": 356,
+        "daytime": 918,
+        "night": 691,
+        "undefined": 35
+      },
+      "vru_boxes": 2988,
+      "weather": {
+        "clear": 799,
+        "foggy": 13,
+        "overcast": 257,
+        "partly cloudy": 182,
+        "rainy": 222,
+        "snowy": 225,
+        "undefined": 302
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "train": {
+    "boxes_in": 1286871,
+    "boxes_kept": 1286351,
+    "dropped": {
+      "class_not_used": 136,
+      "tiny": 384
+    },
+    "errors": [],
+    "frames_in": 69863,
+    "invalid_fraction": 0.000298,
+    "ok": true,
+    "warnings": []
+  },
+  "val": {
+    "boxes_in": 185526,
+    "boxes_kept": 185458,
+    "dropped": {
+      "class_not_used": 15,
+      "tiny": 53
+    },
+    "errors": [],
+    "frames_in": 10000,
+    "invalid_fraction": 0.000286,
+    "ok": true,
+    "warnings": []
+  }
+}
