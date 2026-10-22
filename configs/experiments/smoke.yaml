@@ -1,0 +1,26 @@
+name: smoke
+description: >
+  CI smoke test. Tiny synthetic images, one epoch on CPU, model built from scratch.
+  It proves the training code runs end to end. Its metrics mean nothing.
+
+data:
+  manifest: manifests/bdd100k-v1
+  classes: [car, pedestrian]
+  image_width: 64
+  image_height: 64
+  image_size: 64
+  sampling:
+    train_images: 16
+    val_images: 8
+  seed: 0
+
+train:
+  weights: yolo11n.yaml
+  epochs: 1
+  batch: 4
+  lr0: 0.01
+  device: cpu
+  workers: 0
+  amp: false
+  plots: false
+  seed: 0

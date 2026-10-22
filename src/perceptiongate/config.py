@@ -56,6 +56,9 @@ class TrainConfig(StrictModel):
     batch: int = Field(gt=0)
     lr0: float = Field(default=0.01, gt=0)
     device: Literal["auto", "cpu", "cuda"] = "auto"
+    workers: int = Field(default=4, ge=0)
+    amp: bool = True
+    plots: bool = True
     seed: int = 42
 
 

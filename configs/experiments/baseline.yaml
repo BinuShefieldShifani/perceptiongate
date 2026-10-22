@@ -22,4 +22,7 @@ train:
   batch: 32
   lr0: 0.01
   device: auto
+  workers: 4
+  amp: true
+  plots: true
   seed: 42

@@ -1,1 +1,1 @@
-"""observability package. Implemented in a later step."""
+"""Observability: experiment tracking and run lineage."""

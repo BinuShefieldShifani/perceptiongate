@@ -83,8 +83,8 @@ def data_materialize(
     config: Path = typer.Option(..., help="Experiment config YAML."),
     train_labels: Path = typer.Option(...),
     val_labels: Path = typer.Option(...),
-    train_images: Path = typer.Option(..., help="Folder with BDD100K train images."),
-    val_images: Path = typer.Option(..., help="Folder with BDD100K val images."),
+    train_images: Path = typer.Option(..., help="Train image folder (subfolders are searched)."),
+    val_images: Path = typer.Option(..., help="Val image folder (subfolders are searched)."),
     out: Path = typer.Option(Path("data/yolo"), help="Where to write the YOLO dataset."),
 ) -> None:
     """Turn the manifest into a YOLO dataset (symlinked images + label txt files)."""
@@ -111,6 +111,50 @@ def data_materialize(
         cfg.data.image_height,
     )
     typer.echo(f"YOLO dataset ready: {dataset_yaml}")
+
+
+@data_app.command("make-synthetic")
+def data_make_synthetic(
+    config: Path = typer.Option(..., help="Experiment config (classes and image size)."),
+    out: Path = typer.Option(Path("data/synthetic")),
+    n_train: int = typer.Option(16),
+    n_val: int = typer.Option(8),
+) -> None:
+    """Write a tiny synthetic YOLO dataset for smoke tests."""
+    from perceptiongate.data.synthetic import make_synthetic
+
+    cfg = load_config(config)
+    path = make_synthetic(out, cfg.data.classes, n_train, n_val, cfg.data.image_size, cfg.data.seed)
+    typer.echo(f"Synthetic dataset ready: {path}")
+
+
+@app.command("train")
+def train_cmd(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    dataset_yaml: Path = typer.Option(..., help="dataset.yaml from `pgate data materialize`."),
+    out: Path = typer.Option(..., help="Run output folder."),
+    epochs: int | None = typer.Option(None, help="Override epochs (recorded in run_info)."),
+    skip_manifest_check: bool = typer.Option(
+        False, help="Only for synthetic smoke runs. Recorded as data_verified=false."
+    ),
+) -> None:
+    """Train, validate and log one run."""
+    from perceptiongate.training.train import PreflightError, train
+
+    cfg = load_config(config)
+    try:
+        result = train(
+            cfg, dataset_yaml, out, epochs=epochs, check_manifest=not skip_manifest_check
+        )
+    except PreflightError as exc:
+        typer.echo(f"PREFLIGHT FAILED: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    o = result.metrics["overall"]
+    typer.echo(
+        f"Done in {result.metrics['train_seconds']}s  mAP50-95 {o['map50_95']:.4f}  "
+        f"mAP50 {o['map50']:.4f}  P {o['precision']:.3f}  R {o['recall']:.3f}"
+    )
+    typer.echo(f"Outputs in {out}")
 
 
 if __name__ == "__main__":
