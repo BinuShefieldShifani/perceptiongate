@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Data and artifacts (never committed; tracked with DVC later)
+data/
+runs/
+mlruns/
+artifacts/
+*.pt
+*.onnx
+
+# Secrets
+.env
+kaggle.json
