@@ -44,6 +44,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "N"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer declares CLI options as default values; that is intended.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
 [tool.mypy]
 python_version = "3.10"
 strict = true
@@ -53,4 +57,5 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-q --cov=perceptiongate --cov-report=term-missing"
