@@ -51,7 +51,7 @@ def _resize_one(src: Path, dst: Path, long_side: int, quality: int) -> tuple[int
         size = (round(rgb.width * scale), round(rgb.height * scale))
         rgb = rgb.resize(size, Image.Resampling.BILINEAR)
     rgb.save(dst, "JPEG", quality=quality)
-    return rgb.size
+    return int(rgb.width), int(rgb.height)
 
 
 def prepare_dataset(
