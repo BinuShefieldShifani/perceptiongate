@@ -1,10 +1,14 @@
 """Write a manifest out as an Ultralytics YOLO dataset.
 
 Images are symlinked, not copied, so on Kaggle this takes seconds and no extra disk.
+Some mirrors split one split's images into subfolders (the Kaggle solesensei mirror has
+train/trainA, train/trainB, ...), so images are found by name anywhere under the root.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -12,6 +16,22 @@ import yaml
 
 from perceptiongate.data.manifest import SPLITS, read_rows
 from perceptiongate.data.schema import Box, Frame
+
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+SOURCE_MANIFEST = "source_manifest.json"
+
+
+def index_images(root: Path) -> dict[str, Path]:
+    """Map image file name -> path, searching all subfolders of root."""
+    index: dict[str, Path] = {}
+    for path in sorted(root.rglob("*")):
+        if path.suffix.lower() in IMAGE_SUFFIXES and path.name not in index:
+            index[path.name] = path
+    return index
+
+
+def manifest_fingerprint(manifest_dir: Path) -> str:
+    return hashlib.sha256((manifest_dir / "manifest.json").read_bytes()).hexdigest()
 
 
 def to_yolo_line(box: Box, class_index: int, width: int, height: int) -> str | None:
@@ -39,6 +59,7 @@ def materialize(
     """Create images/, labels/ and dataset.yaml. Returns the dataset.yaml path."""
     index = {c: i for i, c in enumerate(classes)}
     for split in SPLITS:
+        found = index_images(images_by_split[split])
         img_out = out_dir / "images" / split
         lbl_out = out_dir / "labels" / split
         img_out.mkdir(parents=True, exist_ok=True)
@@ -48,9 +69,11 @@ def materialize(
             frame = frames.get(row.name)
             if frame is None:
                 raise KeyError(f"{row.name} is in the manifest but not in the {split} labels")
-            src = images_by_split[split] / row.name
-            if not src.is_file():
-                raise FileNotFoundError(f"Image not found: {src}")
+            src = found.get(row.name)
+            if src is None:
+                raise FileNotFoundError(
+                    f"{row.name} not found anywhere under {images_by_split[split]}"
+                )
             dst = img_out / row.name
             if not dst.exists():
                 os.symlink(src.resolve(), dst)
@@ -74,6 +97,15 @@ def materialize(
             },
             sort_keys=False,
         ),
+        encoding="utf-8",
+    )
+    # Record which manifest built this folder, so training can refuse a stale dataset.
+    (out_dir / SOURCE_MANIFEST).write_text(
+        json.dumps(
+            {"manifest": str(manifest_dir), "sha256": manifest_fingerprint(manifest_dir)},
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
     return dataset_yaml

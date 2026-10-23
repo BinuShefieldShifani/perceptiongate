@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 2, dataset pipeline. Built in public, one step at a time.
+> Status: step 3, training and tracking. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -33,6 +33,54 @@ pgate data build-manifest --config configs/experiments/baseline.yaml \
 pgate data verify-manifest manifests/bdd100k-v1
 ```
 
+### bdd100k-v1 at a glance
+Built from the full BDD100K labels (69,863 train and 10,000 val frames, 1.47M boxes).
+
+| | Images | Boxes | Small (<32² px) | Vulnerable road users |
+|---|---|---|---|---|
+| train | 10,000 | 184,116 | 101,564 (55%) | 15,234 (8%) |
+| val | 2,000 | 36,438 | 20,115 (55%) | 2,988 (8%) |
+
+Label cleaning dropped 437 boxes out of 1.47M (0.03%), all under 2 px on a side.
+No inverted or out-of-image boxes were found. Over half the boxes are small objects
+and fewer than 1 in 10 are pedestrians, riders or cyclists, which is why both get
+their own evaluation slice and their own gate rule.
+
+## Training
+```
+pgate train
+  preflight: dataset.yaml exists, manifest verifies, dataset folder was built
+             from that exact manifest (source_manifest.json hash)  -> else exit 2
+  lineage:   run_info.json  (git commit, config hash, manifest hashes, torch,
+             ultralytics, GPU)
+  train:     Ultralytics YOLO, fixed seed, deterministic=True
+  outputs:   metrics.json (overall + per class), model/best.pt, tracking.json
+  tracking:  always tracking.json; MLflow too if installed
+             (MLFLOW_TRACKING_URI or a local file store). MLflow failures warn,
+             they never stop training.
+```
+CI runs a real one-epoch training on CPU with synthetic images on every PR
+(`smoke-train` job), so broken training code fails in minutes, not on the GPU.
+
+### Getting data to the GPU fast
+The first GPU run spent 45 of its 50 minutes reading images from Kaggle's mounted
+dataset (0.2 MB/s). With the files cached, one epoch took 1.5 minutes. So images are
+prepared once into a single tar and every run unpacks that instead
+([ADR 0004](docs/adr/0004-prepared-dataset-artifact.md)):
+
+```bash
+# once per manifest version (Kaggle, CPU)
+python scripts/kaggle_prepare.py            # -> bdd100k-v1-640.tar, publish as a dataset
+# every training run (Kaggle, GPU)
+python scripts/kaggle_train.py --prepared /kaggle/input/<your dataset> --epochs 30
+```
+
+### Things the first GPU run caught
+- `optimizer=auto` made Ultralytics ignore the configured `lr0` and pick its own
+  optimizer. The optimizer is now an explicit config field.
+- MLflow's file store refused to start. Training carried on with JSON tracking, as
+  ADR 0003 intends. Local tracking now uses SQLite.
+
 ## Quick start
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -59,3 +107,7 @@ kaggle/        Kaggle kernel metadata
 tests/
 docs/adr/      architecture decision records
 ```
+
+## Data license
+BDD100K is released by UC Berkeley for non-commercial research and education. This repo
+contains only image names and derived counts, never images or original label files.

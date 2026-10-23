@@ -98,3 +98,4 @@ def test_materialize_writes_yolo_dataset(
     labels = list((out / "labels" / "train").glob("*.txt"))
     assert len(labels) == 30
     assert labels[0].read_text().count("\n") == 2  # car + pedestrian
+    assert (out / "source_manifest.json").is_file()

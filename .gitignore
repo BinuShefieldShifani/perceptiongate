@@ -23,6 +23,3 @@ build/
 # Secrets
 .env
 kaggle.json
-
-# macOS
-.DS_Store

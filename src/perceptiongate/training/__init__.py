@@ -1,1 +1,1 @@
-"""training package. Implemented in a later step."""
+"""Training: preflight checks, Ultralytics training, metrics extraction."""

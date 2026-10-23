@@ -83,8 +83,8 @@ def data_materialize(
     config: Path = typer.Option(..., help="Experiment config YAML."),
     train_labels: Path = typer.Option(...),
     val_labels: Path = typer.Option(...),
-    train_images: Path = typer.Option(..., help="Folder with BDD100K train images."),
-    val_images: Path = typer.Option(..., help="Folder with BDD100K val images."),
+    train_images: Path = typer.Option(..., help="Train image folder (subfolders are searched)."),
+    val_images: Path = typer.Option(..., help="Val image folder (subfolders are searched)."),
     out: Path = typer.Option(Path("data/yolo"), help="Where to write the YOLO dataset."),
 ) -> None:
     """Turn the manifest into a YOLO dataset (symlinked images + label txt files)."""
@@ -111,6 +111,104 @@ def data_materialize(
         cfg.data.image_height,
     )
     typer.echo(f"YOLO dataset ready: {dataset_yaml}")
+
+
+@data_app.command("prepare")
+def data_prepare(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    train_labels: Path = typer.Option(...),
+    val_labels: Path = typer.Option(...),
+    train_images: Path = typer.Option(..., help="Train image folder (subfolders are searched)."),
+    val_images: Path = typer.Option(..., help="Val image folder (subfolders are searched)."),
+    out_dir: Path = typer.Option(Path("prepared"), help="Folder for the .tar file."),
+    workers: int = typer.Option(32, help="Parallel image readers."),
+    quality: int = typer.Option(90, help="JPEG quality of resized images."),
+) -> None:
+    """Resize the manifest's images once and pack them into one tar (fast to load later)."""
+    from perceptiongate.data.build import load_clean
+    from perceptiongate.data.manifest import verify_manifest
+    from perceptiongate.data.prepare import prepare_dataset
+
+    cfg = load_config(config)
+    problems = verify_manifest(cfg.data.manifest)
+    if problems:
+        typer.echo("Manifest is not intact: " + "; ".join(problems), err=True)
+        raise typer.Exit(code=1)
+    typer.echo("Loading labels...")
+    frames_by_split = {
+        split: {f.name: f for f in load_clean(cfg, labels, split)[0]}
+        for split, labels in (("train", train_labels), ("val", val_labels))
+    }
+    tar = out_dir / f"{cfg.data.manifest.name}-{cfg.data.image_size}.tar"
+    info = prepare_dataset(
+        cfg.data.manifest,
+        frames_by_split,
+        {"train": train_images, "val": val_images},
+        tar,
+        cfg.data.classes,
+        cfg.data.image_width,
+        cfg.data.image_height,
+        long_side=cfg.data.image_size,
+        quality=quality,
+        workers=workers,
+        log=typer.echo,
+    )
+    typer.echo(f"Prepared {tar} ({info['tar_bytes'] / 1e6:.0f} MB) in {info['prepare_seconds']}s")
+
+
+@data_app.command("unpack")
+def data_unpack(
+    tar: Path = typer.Option(..., help="Prepared .tar from `pgate data prepare`."),
+    out: Path = typer.Option(Path("data/yolo"), help="Local folder to unpack into."),
+) -> None:
+    """Unpack a prepared dataset to local disk and print its dataset.yaml path."""
+    from perceptiongate.data.prepare import unpack_dataset
+
+    typer.echo(f"YOLO dataset ready: {unpack_dataset(tar, out)}")
+
+
+@data_app.command("make-synthetic")
+def data_make_synthetic(
+    config: Path = typer.Option(..., help="Experiment config (classes and image size)."),
+    out: Path = typer.Option(Path("data/synthetic")),
+    n_train: int = typer.Option(16),
+    n_val: int = typer.Option(8),
+) -> None:
+    """Write a tiny synthetic YOLO dataset for smoke tests."""
+    from perceptiongate.data.synthetic import make_synthetic
+
+    cfg = load_config(config)
+    path = make_synthetic(out, cfg.data.classes, n_train, n_val, cfg.data.image_size, cfg.data.seed)
+    typer.echo(f"Synthetic dataset ready: {path}")
+
+
+@app.command("train")
+def train_cmd(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    dataset_yaml: Path = typer.Option(..., help="dataset.yaml from `pgate data materialize`."),
+    out: Path = typer.Option(..., help="Run output folder."),
+    epochs: int | None = typer.Option(None, help="Override epochs (recorded in run_info)."),
+    skip_manifest_check: bool = typer.Option(
+        False, help="Only for synthetic smoke runs. Recorded as data_verified=false."
+    ),
+) -> None:
+    """Train, validate and log one run."""
+    from perceptiongate.training.train import PreflightError, train
+
+    cfg = load_config(config)
+    try:
+        result = train(
+            cfg, dataset_yaml, out, epochs=epochs, check_manifest=not skip_manifest_check
+        )
+    except PreflightError as exc:
+        typer.echo(f"PREFLIGHT FAILED: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    o = result.metrics["overall"]
+    typer.echo(
+        f"Done in {result.metrics['train_seconds']}s  mAP50-95 {o['map50_95']:.4f}  "
+        f"mAP50 {o['map50']:.4f}  P {o['precision']:.3f}  R {o['recall']:.3f}"
+    )
+    typer.echo(f"Outputs in {out}")
 
 
 if __name__ == "__main__":

@@ -51,3 +51,42 @@ jobs:
         run: |
           shopt -s nullglob
           for m in manifests/*/; do pgate data verify-manifest "$m"; done
+
+  smoke-train:
+    # Real Ultralytics training on CPU with synthetic images: catches broken training
+    # code on the PR, instead of after waiting for a Kaggle GPU.
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install CPU-only PyTorch (much smaller than the CUDA build)
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[train,tracking,dev]"
+      - name: Prepared-dataset round trip (real JPEG resize, needs Pillow)
+        run: pytest tests/unit/test_prepare.py --no-cov
+      - name: Build synthetic dataset
+        run: pgate data make-synthetic --config configs/experiments/smoke.yaml --out data/synthetic
+      - name: Train one epoch
+        run: |
+          pgate train --config configs/experiments/smoke.yaml \
+            --dataset-yaml data/synthetic/dataset.yaml \
+            --out runs/smoke --skip-manifest-check
+      - name: Check run outputs
+        run: |
+          for f in metrics.json run_info.json tracking.json model/best.pt; do
+            test -f "runs/smoke/$f" || { echo "missing $f"; exit 1; }
+          done
+          python -c "import json; t=json.load(open('runs/smoke/tracking.json')); assert t['status']=='finished', t"
+          cat runs/smoke/metrics.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-run
+          path: |
+            runs/smoke/*.json
+          retention-days: 7
