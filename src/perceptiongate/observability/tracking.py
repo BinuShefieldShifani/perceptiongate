@@ -4,7 +4,8 @@ Every run always writes tracking.json next to its outputs. That file is what lat
 pipeline steps (CI, the gate, the agents) read, so they never depend on a server.
 If MLflow is installed, the same calls also go to MLflow:
   * MLFLOW_TRACKING_URI set   -> that server (e.g. DagsHub)
-  * not set                   -> a local file store inside the run folder
+  * not set                   -> a local SQLite store inside the run folder
+    (mlflow.db + mlartifacts/; MLflow's plain file store is in maintenance mode)
 Set PGATE_TRACKING=json to turn MLflow off.
 
 Tracking must never kill a training run. If MLflow fails (server down, bad credentials),
@@ -87,8 +88,14 @@ class MlflowTracker:
         import mlflow
 
         self.mlflow = mlflow
-        uri = os.environ.get("MLFLOW_TRACKING_URI") or (local_dir / "mlruns").resolve().as_uri()
+        remote = os.environ.get("MLFLOW_TRACKING_URI")
+        local_dir.mkdir(parents=True, exist_ok=True)
+        uri = remote or f"sqlite:///{(local_dir / 'mlflow.db').resolve()}"
         mlflow.set_tracking_uri(uri)
+        if not remote and mlflow.get_experiment_by_name(EXPERIMENT) is None:
+            mlflow.create_experiment(
+                EXPERIMENT, artifact_location=(local_dir / "mlartifacts").resolve().as_uri()
+            )
         mlflow.set_experiment(EXPERIMENT)
         self.uri = uri
 

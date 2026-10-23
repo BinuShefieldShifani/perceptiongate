@@ -54,6 +54,9 @@ class TrainConfig(StrictModel):
     weights: str = "yolo11n.pt"
     epochs: int = Field(gt=0)
     batch: int = Field(gt=0)
+    # Explicit on purpose. Ultralytics' "auto" picks its own optimizer and learning rate
+    # and silently ignores lr0, so the config would no longer describe the run.
+    optimizer: Literal["SGD", "AdamW", "Adam"] = "SGD"
     lr0: float = Field(default=0.01, gt=0)
     device: Literal["auto", "cpu", "cuda"] = "auto"
     workers: int = Field(default=4, ge=0)

@@ -1,10 +1,13 @@
-"""Run one training job on Kaggle: verify manifest -> build YOLO dataset -> train.
+"""Run one training job on Kaggle.
 
-Usage inside a Kaggle notebook (GPU on), from the repo root:
-    !python scripts/kaggle_train.py --config configs/experiments/baseline.yaml --epochs 3
+Fast path (normal): attach your prepared dataset and pass its tar file.
+    !python scripts/kaggle_train.py --prepared /kaggle/input/.../bdd100k-v1-640.tar --epochs 3
 
-Everything the run produces ends up in /kaggle/working/outputs/<experiment>, which is what
-Kaggle keeps after the notebook finishes. Step 4 downloads that folder from GitHub Actions.
+Slow path (no prepared dataset yet): build the YOLO folder from raw BDD100K. Expect ~45
+minutes of slow disk reads before training is fast.
+    !python scripts/kaggle_train.py --epochs 3
+
+Outputs go to /kaggle/working/outputs/<experiment>.
 """
 
 from __future__ import annotations
@@ -25,9 +28,20 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def find_tar(path: Path) -> Path:
+    """Accept the tar itself or any folder containing exactly one .tar."""
+    if path.is_file():
+        return path
+    tars = sorted(path.rglob("*.tar"))
+    if len(tars) != 1:
+        raise SystemExit(f"Expected one .tar under {path}, found {len(tars)}")
+    return tars[0]
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="configs/experiments/baseline.yaml")
+    p.add_argument("--prepared", type=Path, default=None, help="Prepared .tar or its folder.")
     p.add_argument("--labels-dir", type=Path, default=LABELS)
     p.add_argument("--images-dir", type=Path, default=IMAGES)
     p.add_argument("--work", type=Path, default=Path("/kaggle/working"))
@@ -38,30 +52,37 @@ def main() -> int:
     from perceptiongate.config import load_config
 
     cfg = load_config(args.config)
-    dataset = args.work / "yolo" / cfg.data.manifest.name
     out = args.work / "outputs" / cfg.name
     if out.exists():
         shutil.rmtree(out)
 
     pgate = [sys.executable, "-m", "perceptiongate.cli"]
     run([*pgate, "data", "verify-manifest", str(cfg.data.manifest)])
-    run(
-        [
-            *pgate, "data", "materialize", "--config", args.config,
-            "--train-labels", str(args.labels_dir / "bdd100k_labels_images_train.json"),
-            "--val-labels", str(args.labels_dir / "bdd100k_labels_images_val.json"),
-            "--train-images", str(args.images_dir / "train"),
-            "--val-images", str(args.images_dir / "val"),
-            "--out", str(dataset),
-        ]
-    )  # fmt: skip
+    if args.prepared:
+        tar = find_tar(args.prepared)
+        run([*pgate, "data", "unpack", "--tar", str(tar), "--out", str(args.work / "yolo")])
+        dataset = args.work / "yolo" / tar.name.removesuffix(".tar")
+    else:
+        dataset = args.work / "yolo" / cfg.data.manifest.name
+        run(
+            [
+                *pgate, "data", "materialize", "--config", args.config,
+                "--train-labels", str(args.labels_dir / "bdd100k_labels_images_train.json"),
+                "--val-labels", str(args.labels_dir / "bdd100k_labels_images_val.json"),
+                "--train-images", str(args.images_dir / "train"),
+                "--val-images", str(args.images_dir / "val"),
+                "--out", str(dataset),
+            ]
+        )  # fmt: skip
+
+    # train's preflight checks the dataset's source_manifest.json against the committed
+    # manifest, so a tar built from an older manifest is refused here.
     train_cmd = [*pgate, "train", "--config", args.config,
                  "--dataset-yaml", str(dataset / "dataset.yaml"), "--out", str(out)]  # fmt: skip
     if args.epochs:
         train_cmd += ["--epochs", str(args.epochs)]
     run(train_cmd)
 
-    # Keep outputs small: drop Ultralytics' duplicate weights, keep our copy in model/.
     shutil.rmtree(out / "ultralytics" / "weights", ignore_errors=True)
     print(f"\nOutputs: {out}")
     return 0

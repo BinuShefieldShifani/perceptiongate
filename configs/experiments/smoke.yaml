@@ -18,6 +18,7 @@ train:
   weights: yolo11n.yaml
   epochs: 1
   batch: 4
+  optimizer: SGD
   lr0: 0.01
   device: cpu
   workers: 0

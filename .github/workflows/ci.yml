@@ -66,7 +66,9 @@ jobs:
           cache: pip
       - name: Install CPU-only PyTorch (much smaller than the CUDA build)
         run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install -e ".[train,tracking]"
+      - run: pip install -e ".[train,tracking,dev]"
+      - name: Prepared-dataset round trip (real JPEG resize, needs Pillow)
+        run: pytest tests/unit/test_prepare.py --no-cov
       - name: Build synthetic dataset
         run: pgate data make-synthetic --config configs/experiments/smoke.yaml --out data/synthetic
       - name: Train one epoch

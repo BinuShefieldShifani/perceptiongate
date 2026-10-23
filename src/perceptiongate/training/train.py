@@ -108,7 +108,7 @@ def _default_factory(weights: str) -> Any:
     from ultralytics import YOLO, settings
 
     # We do our own tracking; stop Ultralytics from logging to MLflow/W&B on its own.
-    for key in ("mlflow", "wandb", "clearml", "comet", "dvc", "neptune", "tensorboard"):
+    for key in ("mlflow", "wandb", "clearml", "comet", "dvc", "neptune", "raytune", "tensorboard"):
         with contextlib.suppress(KeyError, ValueError):
             settings.update({key: False})
     return YOLO(weights)
@@ -157,6 +157,7 @@ def train(
             epochs=n_epochs,
             batch=t.batch,
             imgsz=cfg.data.image_size,
+            optimizer=t.optimizer,
             lr0=t.lr0,
             seed=t.seed,
             deterministic=True,

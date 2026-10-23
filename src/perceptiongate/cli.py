@@ -113,6 +113,60 @@ def data_materialize(
     typer.echo(f"YOLO dataset ready: {dataset_yaml}")
 
 
+@data_app.command("prepare")
+def data_prepare(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    train_labels: Path = typer.Option(...),
+    val_labels: Path = typer.Option(...),
+    train_images: Path = typer.Option(..., help="Train image folder (subfolders are searched)."),
+    val_images: Path = typer.Option(..., help="Val image folder (subfolders are searched)."),
+    out_dir: Path = typer.Option(Path("prepared"), help="Folder for the .tar file."),
+    workers: int = typer.Option(32, help="Parallel image readers."),
+    quality: int = typer.Option(90, help="JPEG quality of resized images."),
+) -> None:
+    """Resize the manifest's images once and pack them into one tar (fast to load later)."""
+    from perceptiongate.data.build import load_clean
+    from perceptiongate.data.manifest import verify_manifest
+    from perceptiongate.data.prepare import prepare_dataset
+
+    cfg = load_config(config)
+    problems = verify_manifest(cfg.data.manifest)
+    if problems:
+        typer.echo("Manifest is not intact: " + "; ".join(problems), err=True)
+        raise typer.Exit(code=1)
+    typer.echo("Loading labels...")
+    frames_by_split = {
+        split: {f.name: f for f in load_clean(cfg, labels, split)[0]}
+        for split, labels in (("train", train_labels), ("val", val_labels))
+    }
+    tar = out_dir / f"{cfg.data.manifest.name}-{cfg.data.image_size}.tar"
+    info = prepare_dataset(
+        cfg.data.manifest,
+        frames_by_split,
+        {"train": train_images, "val": val_images},
+        tar,
+        cfg.data.classes,
+        cfg.data.image_width,
+        cfg.data.image_height,
+        long_side=cfg.data.image_size,
+        quality=quality,
+        workers=workers,
+        log=typer.echo,
+    )
+    typer.echo(f"Prepared {tar} ({info['tar_bytes'] / 1e6:.0f} MB) in {info['prepare_seconds']}s")
+
+
+@data_app.command("unpack")
+def data_unpack(
+    tar: Path = typer.Option(..., help="Prepared .tar from `pgate data prepare`."),
+    out: Path = typer.Option(Path("data/yolo"), help="Local folder to unpack into."),
+) -> None:
+    """Unpack a prepared dataset to local disk and print its dataset.yaml path."""
+    from perceptiongate.data.prepare import unpack_dataset
+
+    typer.echo(f"YOLO dataset ready: {unpack_dataset(tar, out)}")
+
+
 @data_app.command("make-synthetic")
 def data_make_synthetic(
     config: Path = typer.Option(..., help="Experiment config (classes and image size)."),

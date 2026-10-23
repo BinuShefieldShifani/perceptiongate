@@ -62,10 +62,24 @@ pgate train
 CI runs a real one-epoch training on CPU with synthetic images on every PR
 (`smoke-train` job), so broken training code fails in minutes, not on the GPU.
 
-On Kaggle (GPU on, repo cloned, `pip install -e ".[train,tracking]"`):
+### Getting data to the GPU fast
+The first GPU run spent 45 of its 50 minutes reading images from Kaggle's mounted
+dataset (0.2 MB/s). With the files cached, one epoch took 1.5 minutes. So images are
+prepared once into a single tar and every run unpacks that instead
+([ADR 0004](docs/adr/0004-prepared-dataset-artifact.md)):
+
 ```bash
-python scripts/kaggle_train.py --config configs/experiments/baseline.yaml --epochs 3
+# once per manifest version (Kaggle, CPU)
+python scripts/kaggle_prepare.py            # -> bdd100k-v1-640.tar, publish as a dataset
+# every training run (Kaggle, GPU)
+python scripts/kaggle_train.py --prepared /kaggle/input/<your dataset> --epochs 30
 ```
+
+### Things the first GPU run caught
+- `optimizer=auto` made Ultralytics ignore the configured `lr0` and pick its own
+  optimizer. The optimizer is now an explicit config field.
+- MLflow's file store refused to start. Training carried on with JSON tracking, as
+  ADR 0003 intends. Local tracking now uses SQLite.
 
 ## Quick start
 ```bash
