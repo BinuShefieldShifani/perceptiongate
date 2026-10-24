@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 5, release gate. Built in public, one step at a time.
+> Status: step 6, analyst agent. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -152,6 +152,26 @@ can't resolve VRU changes under ~3 points, so the thresholds now say so.
 Two calibration runs check the gate on real models:
 `configs/experiments/short-25ep.yaml` (half the schedule, should FAIL) and
 `configs/experiments/seed7.yaml` (same config, other seed, should PASS).
+
+## Analyst agent
+```bash
+pgate gate    --candidate outputs/<run>/eval --name <run>
+pgate explain --candidate outputs/<run>/eval --name <run> \
+              --candidate-config configs/experiments/<run>.yaml
+```
+Writes `pr_comment.md`: the decision (from the gate), a three-part explanation, and the
+full gate table. The explanation comes from an LLM that only sees a fact sheet built by
+code, and every number it writes is checked against that sheet. A reply with a number
+that isn't there is retried once with the exact numbers named; after that, a code-written
+summary is used instead ([ADR 0007](docs/adr/0007-grounded-analyst-agent.md)).
+
+Set `ANTHROPIC_API_KEY` for Claude, or `PGATE_LLM=openai` with `PGATE_LLM_BASE_URL` for
+Ollama/Groq/vLLM. Without either, the comment uses the code-written summary.
+
+First real case, short-25ep (half the training schedule): the gate failed it on overall
+recall (−2.1 points) and small-object recall (−2.5). VRU recall also dropped 2.5 points.
+That is within the 3-point tolerance, so it passes, but the drop is real, and the
+report now shows it as "real drop, within tolerance" instead of a green tick.
 
 ## Quick start
 ```bash

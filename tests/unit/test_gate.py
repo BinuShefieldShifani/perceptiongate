@@ -39,6 +39,9 @@ def test_bad_rules_rejected(rule: dict[str, object]) -> None:
 
 def test_classify_and_outcome() -> None:
     assert classify(-0.005, (-0.02, 0.01), 0.01) == "ok"
+    # Confirmed drop smaller than the tolerance: passes, but must not look like "no change".
+    assert classify(-0.025, (-0.039, -0.012), 0.03) == "within-tolerance"
+    assert rule_outcome("within-tolerance", "fail") == PASS
     assert classify(0.02, (0.005, 0.03), 0.01) == "improved"
     assert classify(-0.03, (-0.05, -0.01), 0.01) == "regression"
     assert classify(-0.03, (-0.06, 0.004), 0.01) == "possible-regression"
