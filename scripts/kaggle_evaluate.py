@@ -28,6 +28,10 @@ def find_one(pattern: str, what: str) -> Path:
 def find_weights(work: Path) -> Path:
     """best.pt, either directly in an attached dataset or inside its model.zip."""
     hits = sorted(glob.glob("/kaggle/input/**/best.pt", recursive=True))
+    # A published run folder also holds MLflow's artifact copy; ours is model/best.pt.
+    ours = [h for h in hits if Path(h).parent.name == "model"]
+    if len(ours) == 1:
+        return Path(ours[0])
     if len(hits) == 1:
         return Path(hits[0])
     zip_path = find_one("/kaggle/input/**/model.zip", "model.zip or best.pt")

@@ -41,6 +41,55 @@ def _metric(value: float, ci: tuple[float, float]) -> dict[str, Any]:
     return {"value": _r(value), "ci95": [_r(ci[0]), _r(ci[1])]}
 
 
+def count_stats(
+    arrays: MatchedArrays, classes: list[str], image_width: int, image_height: int
+) -> dict[str, CountStat]:
+    """Recall-type statistics as per-image counts. Keys: recall, precision, vru_recall,
+    small_recall, and recall:<class> for every class."""
+    a = arrays
+    n = len(a.names)
+    vru = [i for i, c in enumerate(classes) if c in VULNERABLE_ROAD_USERS]
+    small = a.gt_area * image_width * image_height < SMALL_AREA_PX
+    is_vru = np.isin(a.gt_cls, vru)
+    op = a.det_score >= a.op_conf
+    gt_all = per_image_counts(n, a.gt_img, np.ones(len(a.gt_img), bool))
+    stats = {
+        "recall": CountStat(per_image_counts(n, a.gt_img, a.gt_hit), gt_all),
+        "precision": CountStat(
+            per_image_counts(n, a.det_img, op & a.det_tp[:, 0]),
+            per_image_counts(n, a.det_img, op),
+        ),
+        "vru_recall": CountStat(
+            per_image_counts(n, a.gt_img, a.gt_hit & is_vru),
+            per_image_counts(n, a.gt_img, is_vru),
+        ),
+        "small_recall": CountStat(
+            per_image_counts(n, a.gt_img, a.gt_hit & small),
+            per_image_counts(n, a.gt_img, small),
+        ),
+    }
+    for c, name in enumerate(classes):
+        is_c = a.gt_cls == c
+        stats[f"recall:{name}"] = CountStat(
+            per_image_counts(n, a.gt_img, a.gt_hit & is_c), per_image_counts(n, a.gt_img, is_c)
+        )
+    return stats
+
+
+def slice_selections(names: list[str], rows: dict[str, ManifestRow]) -> dict[str, Any]:
+    """Image indices for every image slice that has at least one image."""
+    frames = [
+        Frame(name=nm, weather=rows[nm].weather, scene=rows[nm].scene, timeofday=rows[nm].timeofday)
+        for nm in names
+    ]
+    out = {}
+    for name, pred in IMAGE_SLICES.items():
+        sel = np.array([i for i, f in enumerate(frames) if pred(f)], dtype=np.int64)
+        if len(sel):
+            out[name] = sel
+    return out
+
+
 def build_report(
     arrays: MatchedArrays,
     rows: dict[str, ManifestRow],
@@ -52,43 +101,14 @@ def build_report(
     seed: int = 0,
 ) -> dict[str, Any]:
     idx = Index(arrays, len(classes))
-    n = idx.n_images
     a = arrays
     vru = [i for i, c in enumerate(classes) if c in VULNERABLE_ROAD_USERS]
-    small = a.gt_area * image_width * image_height < SMALL_AREA_PX
-    is_vru = np.isin(a.gt_cls, vru)
-    op = a.det_score >= a.op_conf
+    stats = count_stats(arrays, classes, image_width, image_height)
+    gt_all = stats["recall"].den
+    per_class_hits = [stats[f"recall:{c}"].num for c in classes]
 
-    gt_all = per_image_counts(n, a.gt_img, np.ones(len(a.gt_img), bool))
-    hit_all = per_image_counts(n, a.gt_img, a.gt_hit)
-    det_op = per_image_counts(n, a.det_img, op)
-    tp_op = per_image_counts(n, a.det_img, op & a.det_tp[:, 0])
-    stats = {
-        "recall": CountStat(hit_all, gt_all),
-        "precision": CountStat(tp_op, det_op),
-        "vru_recall": CountStat(
-            per_image_counts(n, a.gt_img, a.gt_hit & is_vru),
-            per_image_counts(n, a.gt_img, is_vru),
-        ),
-        "small_recall": CountStat(
-            per_image_counts(n, a.gt_img, a.gt_hit & small),
-            per_image_counts(n, a.gt_img, small),
-        ),
-    }
-    per_class_hits = [
-        per_image_counts(n, a.gt_img, a.gt_hit & (a.gt_cls == c)) for c in range(len(classes))
-    ]
-
-    frames = [
-        Frame(name=nm, weather=r.weather, scene=r.scene, timeofday=r.timeofday)
-        for nm in a.names
-        for r in [rows[nm]]
-    ]
     slices: dict[str, Any] = {}
-    for name, pred in IMAGE_SLICES.items():
-        sel = np.array([i for i, f in enumerate(frames) if pred(f)], dtype=np.int64)
-        if len(sel) == 0:
-            continue
+    for name, sel in slice_selections(a.names, rows).items():
         s_seed = seed + zlib.crc32(name.encode())
         with_ci = len(sel) >= MIN_IMAGES_FOR_CI
         ap = class_ap(idx, sel)
@@ -112,7 +132,8 @@ def build_report(
             "map50_95": _metric(m5095, map_ci[1]),
             "vru_map50": _r(map_values(ap, vru)[0]),
         }
-        for key, stat in stats.items():
+        for key in ("recall", "precision", "vru_recall", "small_recall"):
+            stat = stats[key]
             entry[key] = _metric(stat(sel), ci(stat, n_boot_count))
         entry["n_vru_gt"] = int(stats["vru_recall"].den[sel].sum())
         entry["n_small_gt"] = int(stats["small_recall"].den[sel].sum())

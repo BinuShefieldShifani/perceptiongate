@@ -1,1 +1,1 @@
-"""gate package. Implemented in a later step."""
+"""Release gate: deterministic, paired comparison of a candidate against the baseline."""
