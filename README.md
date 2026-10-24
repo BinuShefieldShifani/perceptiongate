@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 3, training and tracking. Built in public, one step at a time.
+> Status: step 4, evaluation by slice. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -80,6 +80,41 @@ python scripts/kaggle_train.py --prepared /kaggle/input/<your dataset> --epochs 
   optimizer. The optimizer is now an explicit config field.
 - MLflow's file store refused to start. Training carried on with JSON tracking, as
   ADR 0003 intends. Local tracking now uses SQLite.
+
+## Baseline (YOLO11n, 50 epochs, bdd100k-v1)
+1.19 GPU hours on a Kaggle T4, about 75 s per epoch once data comes from the prepared
+tar. Full numbers in `baselines/bdd100k-v1/`.
+
+| Class | mAP50 | Recall |
+|---|---:|---:|
+| car | 0.699 | 0.666 |
+| truck | 0.502 | 0.480 |
+| traffic_sign | 0.491 | 0.467 |
+| traffic_light | 0.462 | 0.476 |
+| bus | 0.435 | 0.383 |
+| pedestrian | 0.433 | 0.402 |
+| rider | 0.313 | 0.306 |
+| motorcycle | 0.237 | 0.176 |
+| bicycle | 0.210 | 0.228 |
+| **all** | **0.420** | **0.398** |
+
+Overall mAP50 of 0.42 hides that the model misses about 82% of motorcycles and 6 in 10
+pedestrians. That is why evaluation goes per slice and the gate has a separate rule for
+vulnerable road users.
+
+## Evaluation by slice
+```bash
+pgate evaluate --config ... --weights best.pt --dataset-dir <yolo dataset> --out eval/
+pgate score    --config ... --arrays eval/eval_arrays.npz --out eval/   # CPU, no model
+```
+For each slice (all, day, night, dawn_dusk, clear, rain, snow, fog, highway,
+city_street): mAP50 and mAP50-95 with 95% bootstrap intervals, recall and precision at
+the operating point, vulnerable-road-user recall, small-object recall, and per-class AP
+and recall. Output: `slice_report.json` for machines, `slice_report.md` for people.
+
+The mAP code matches pycocotools exactly on random test data
+([ADR 0005](docs/adr/0005-own-slice-metrics.md)). Scoring 2,000 images with 600k
+detections takes about 1.5 minutes on CPU, including all bootstrap intervals.
 
 ## Quick start
 ```bash

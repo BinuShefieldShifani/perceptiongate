@@ -211,5 +211,42 @@ def train_cmd(
     typer.echo(f"Outputs in {out}")
 
 
+@app.command("evaluate")
+def evaluate_cmd(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    weights: Path = typer.Option(..., help="Model weights (best.pt)."),
+    dataset_dir: Path = typer.Option(..., help="YOLO dataset folder (has images/val, labels/val)."),
+    out: Path = typer.Option(..., help="Where to write the slice report."),
+    op_conf: float = typer.Option(0.25, help="Confidence threshold for recall/precision."),
+    ap_resamples: int = typer.Option(100, help="Bootstrap resamples for mAP intervals."),
+) -> None:
+    """Predict on the frozen val set and write per-slice metrics with intervals."""
+    from perceptiongate.data.manifest import verify_manifest
+    from perceptiongate.evaluation.run import REPORT_MD, evaluate
+
+    cfg = load_config(config)
+    if problems := verify_manifest(cfg.data.manifest):
+        typer.echo("Manifest is not intact: " + "; ".join(problems), err=True)
+        raise typer.Exit(code=1)
+    evaluate(cfg, weights, dataset_dir, out, op_conf=op_conf, n_boot_ap=ap_resamples)
+    typer.echo((out / REPORT_MD).read_text())
+
+
+@app.command("score")
+def score_cmd(
+    config: Path = typer.Option(..., help="Experiment config YAML."),
+    arrays: Path = typer.Option(..., help="eval_arrays.npz from `pgate evaluate`."),
+    out: Path = typer.Option(..., help="Where to write the slice report."),
+    ap_resamples: int = typer.Option(100),
+) -> None:
+    """Recompute the slice report from saved predictions (CPU only, no model needed)."""
+    from perceptiongate.evaluation.matching import MatchedArrays
+    from perceptiongate.evaluation.run import REPORT_MD, score
+
+    cfg = load_config(config)
+    score(cfg, MatchedArrays.load(str(arrays)), out, n_boot_ap=ap_resamples)
+    typer.echo((out / REPORT_MD).read_text())
+
+
 if __name__ == "__main__":
     app()
