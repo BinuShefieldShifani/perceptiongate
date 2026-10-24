@@ -18,7 +18,7 @@ data:
 
 train:
   weights: yolo11n.pt
-  epochs: 30
+  epochs: 50
   batch: 32
   optimizer: SGD
   lr0: 0.01
