@@ -1,0 +1,19 @@
+{
+  "experiment": "baseline",
+  "config_hash": "6fbe1ee2e2bafe89",
+  "git_commit": "d22c72ce9f0fdaccfcbe29b76c6a41639c415bee",
+  "perceptiongate": "0.1.0",
+  "python": "3.13.15",
+  "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+  "torch": "2.11.0+cu128",
+  "ultralytics": "8.4.185",
+  "gpu": "Tesla T4",
+  "manifest": {
+    "path": "manifests/bdd100k-v1",
+    "train_sha256": "e608980c6e1a33d60122129499ff345ae1539fc509a3486961bb1ff53bbc274b",
+    "val_sha256": "36eb63bf0fc8c61560f66c9158ac6ec2679495807487f917f872c2d8b4193b0e"
+  },
+  "epochs_run": 50,
+  "epochs_override": true,
+  "data_verified": true
+}
