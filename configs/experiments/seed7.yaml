@@ -1,0 +1,32 @@
+name: seed7
+description: >
+  Gate check (should PASS). Identical to baseline except the training seed, so any
+  difference is noise. Measures real seed-to-seed variation and tests for false alarms.
+  data.seed stays 42: the dataset must not change, only training randomness.
+
+data:
+  manifest: manifests/bdd100k-v1
+  classes: [car, truck, bus, pedestrian, rider, bicycle, motorcycle, traffic_light, traffic_sign]
+  image_width: 1280
+  image_height: 720
+  image_size: 640
+  max_invalid_box_fraction: 0.005
+  sampling:
+    train_images: 10000
+    val_images: 2000
+    strata: [timeofday, weather]
+    min_per_stratum: 50
+    require_objects: true
+  seed: 42
+
+train:
+  weights: yolo11n.pt
+  epochs: 50
+  batch: 32
+  optimizer: SGD
+  lr0: 0.01
+  device: auto
+  workers: 4
+  amp: true
+  plots: true
+  seed: 7

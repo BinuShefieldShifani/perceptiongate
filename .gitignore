@@ -25,6 +25,8 @@ build/
 *.onnx
 *.db
 *.npz
+# ...except the baseline's evaluation arrays: the gate needs them, and they are small.
+!baselines/**/eval_arrays.npz
 *.tar
 *.bin
 

@@ -1,0 +1,74 @@
+# Release gate policy. Reviewed like code: changing a threshold is a PR.
+#
+# Every rule compares the candidate with the baseline on the SAME val images, using a
+# paired bootstrap of the difference (candidate - baseline). "Interval" below means the
+# Bonferroni-corrected interval for fail rules and the 95% interval for review rules.
+# Per result:
+#   ok / improved        the drop is within max_drop (improved: interval above zero)
+#   regression           dropped more than max_drop AND the interval is entirely below zero
+#   possible-regression  dropped more than max_drop, but the interval still includes zero
+#
+# Decision:
+#   FAIL          a "fail" rule shows a regression
+#   NEEDS_REVIEW  a "fail" rule shows a possible regression, or a "review" rule a regression
+#   PASS          otherwise
+#
+# Thresholds sit just above the noise this val set can resolve (2,000 images, ~750 VRU
+# boxes). Simulated seed-to-seed noise, as the smallest drop a 95% test can catch:
+# overall recall 0.7 pt, small objects 1.3, VRU 2.3, pedestrian 2.5, VRU per condition 4-5.
+# Re-calibrate with real seed runs (configs/experiments/seed7.yaml).
+# See docs/adr/0006-release-gate.md.
+
+name: default
+data_config: configs/experiments/baseline.yaml
+baseline: baselines/bdd100k-v1
+min_images: 30
+# Family-wise false-alarm rate for the blocking checks, split across them (Bonferroni).
+# Without it, 4 blocking checks at 95% each gave a 10% false-FAIL rate in simulation.
+alpha: 0.05
+resamples:
+  recall: 2000
+  map: 100
+
+rules:
+  - id: overall-recall
+    metric: recall
+    slices: [all]
+    max_drop: 0.01
+    severity: fail
+
+  - id: vru-recall
+    metric: vru_recall
+    slices: [all]
+    max_drop: 0.03
+    severity: fail
+
+  - id: pedestrian-recall
+    metric: recall:pedestrian
+    slices: [all]
+    max_drop: 0.03
+    severity: fail
+
+  - id: small-object-recall
+    metric: small_recall
+    slices: [all]
+    max_drop: 0.015
+    severity: fail
+
+  - id: vru-recall-by-condition
+    metric: vru_recall
+    slices: [day, night, dawn_dusk, rain, snow, highway, city_street]
+    max_drop: 0.05
+    severity: review
+
+  - id: recall-by-condition
+    metric: recall
+    slices: [day, night, dawn_dusk, rain, snow, highway, city_street]
+    max_drop: 0.015
+    severity: review
+
+  - id: overall-map50
+    metric: map50
+    slices: [all]
+    max_drop: 0.015
+    severity: review

@@ -248,5 +248,31 @@ def score_cmd(
     typer.echo((out / REPORT_MD).read_text())
 
 
+@app.command("gate")
+def gate_cmd(
+    candidate: Path = typer.Option(..., help="Candidate eval folder (has eval_arrays.npz)."),
+    policy: Path = typer.Option(Path("configs/gate/policy.yaml"), help="Gate policy YAML."),
+    out: Path | None = typer.Option(None, help="Where to write gate_result.*; default: candidate."),
+    name: str = typer.Option("candidate", help="Candidate name shown in the report."),
+    strict: bool = typer.Option(False, help="Exit non-zero on NEEDS_REVIEW too."),
+) -> None:
+    """Compare a candidate with the baseline under the policy. Exit 1 on FAIL."""
+    from perceptiongate.evaluation.run import ARRAYS
+    from perceptiongate.gate.compare import GateInputError
+    from perceptiongate.gate.decide import FAIL, REVIEW, run_gate, to_markdown, write_outputs
+    from perceptiongate.gate.policy import load_policy
+
+    pol = load_policy(policy)
+    try:
+        result = run_gate(pol, pol.baseline / ARRAYS, candidate / ARRAYS)
+    except GateInputError as exc:
+        typer.echo(f"GATE ERROR: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    write_outputs(result, out or candidate, name)
+    typer.echo(to_markdown(result, name))
+    if result["decision"] == FAIL or (strict and result["decision"] == REVIEW):
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

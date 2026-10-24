@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 4, evaluation by slice. Built in public, one step at a time.
+> Status: step 5, release gate. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -115,6 +115,43 @@ and recall. Output: `slice_report.json` for machines, `slice_report.md` for peop
 The mAP code matches pycocotools exactly on random test data
 ([ADR 0005](docs/adr/0005-own-slice-metrics.md)). Scoring 2,000 images with 600k
 detections takes about 1.5 minutes on CPU, including all bootstrap intervals.
+
+## Baseline by slice
+From `baselines/bdd100k-v1/slice_report.md` (operating point: confidence 0.25, IoU 0.5):
+
+| Slice | Images | mAP50 [95% CI] | VRU recall [95% CI] |
+|---|---:|---|---|
+| all | 2000 | 0.405 [0.391, 0.426] | 0.366 [0.340, 0.391] |
+| night | 691 | 0.440 [0.378, 0.503] | 0.357 [0.302, 0.414] |
+| day | 918 | 0.406 [0.386, 0.436] | 0.373 [0.342, 0.405] |
+| **highway** | 501 | **0.332** [0.283, 0.424] | **0.248** [0.160, 0.340] |
+
+The weakest slice is highway, not night: pedestrians and cyclists there are rare and
+usually far away. Night is as good as day.
+
+## Release gate
+```bash
+pgate gate --candidate outputs/<run>/eval --name <run>     # exit 0 PASS/REVIEW, 1 FAIL
+```
+Compares a candidate with the baseline on the same images (paired bootstrap), under
+`configs/gate/policy.yaml`. Blocking checks: overall, VRU, pedestrian and small-object
+recall, with a Bonferroni correction. Per-condition recall and mAP can only ask for
+review. Every result shows its noise floor. Thresholds were set from simulated
+seed-to-seed noise ([ADR 0006](docs/adr/0006-release-gate.md)):
+
+| True VRU drop | Gate (simulated) |
+|---|---|
+| none | 40 of 40 PASS |
+| 3 pt | FAIL 5 of 10 |
+| 5 pt | FAIL 8 of 10 |
+| 8 pt | FAIL 10 of 10 |
+
+The first version of the policy flagged 9 of 10 equal-quality models. The val set
+can't resolve VRU changes under ~3 points, so the thresholds now say so.
+
+Two calibration runs check the gate on real models:
+`configs/experiments/short-25ep.yaml` (half the schedule, should FAIL) and
+`configs/experiments/seed7.yaml` (same config, other seed, should PASS).
 
 ## Quick start
 ```bash
