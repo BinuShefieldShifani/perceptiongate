@@ -12,14 +12,25 @@ htmlcov/
 dist/
 build/
 
-# Data and artifacts (never committed; tracked with DVC later)
+# Data and run outputs (never committed). Models live in Kaggle datasets;
+# only small reference files go in git, under baselines/.
 /data/
 /runs/
+/outputs/
+/prepared/
 /mlruns/
+/mlartifacts/
 /artifacts/
 *.pt
 *.onnx
+*.db
+*.npz
+*.tar
+*.bin
 
 # Secrets
 .env
 kaggle.json
+
+# macOS
+.DS_Store

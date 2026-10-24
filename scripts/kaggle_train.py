@@ -7,7 +7,7 @@ Slow path (no prepared dataset yet): build the YOLO folder from raw BDD100K. Exp
 minutes of slow disk reads before training is fast.
     !python scripts/kaggle_train.py --epochs 3
 
-Outputs go to /kaggle/working/outputs/<experiment>.
+Outputs go to /kaggle/working/outputs/<experiment>, with the slice report in eval/.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ def main() -> int:
     p.add_argument("--images-dir", type=Path, default=IMAGES)
     p.add_argument("--work", type=Path, default=Path("/kaggle/working"))
     p.add_argument("--epochs", type=int, default=None)
+    p.add_argument("--no-eval", action="store_true", help="Skip the slice evaluation.")
     args = p.parse_args()
 
     sys.path.insert(0, "src")
@@ -82,6 +83,12 @@ def main() -> int:
     if args.epochs:
         train_cmd += ["--epochs", str(args.epochs)]
     run(train_cmd)
+    if not args.no_eval:
+        run(
+            [*pgate, "evaluate", "--config", args.config,
+             "--weights", str(out / "model" / "best.pt"),
+             "--dataset-dir", str(dataset), "--out", str(out / "eval")]
+        )  # fmt: skip
 
     shutil.rmtree(out / "ultralytics" / "weights", ignore_errors=True)
     print(f"\nOutputs: {out}")
