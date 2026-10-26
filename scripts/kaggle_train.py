@@ -73,8 +73,13 @@ def main() -> int:
     run([*pgate, "data", "verify-manifest", str(cfg.data.manifest)])
     if args.prepared:
         tar = find_tar(args.prepared)
-        run([*pgate, "data", "unpack", "--tar", str(tar), "--out", str(args.work / "yolo")])
-        dataset = args.work / "yolo" / tar.name.removesuffix(".tar")
+        # Use the folder the tar actually contains, not a guess from the tar's file name
+        # (a copy named data.tar still unpacks to bdd100k-v1-640/).
+        from perceptiongate.data.prepare import unpack_dataset
+
+        print(f"+ unpack {tar}", flush=True)
+        dataset = unpack_dataset(tar, args.work / "yolo").parent
+        print(f"YOLO dataset ready: {dataset / 'dataset.yaml'}", flush=True)
     else:
         dataset = args.work / "yolo" / cfg.data.manifest.name
         run(
