@@ -16,6 +16,8 @@ from perceptiongate.gate.policy import Policy
 from perceptiongate.observability.tracking import flatten
 
 IGNORED_CONFIG_KEYS = {"name", "description"}
+# Per-class recall on fewer boxes than this is too uncertain to read much into.
+FEW_BOXES = 200
 
 
 def _pts(x: float | None) -> float | None:
@@ -94,6 +96,7 @@ def build_facts(
         "improvements": [_check(r) for r in gate["results"] if r["status"] == "improved"],
         "too_noisy_to_decide": gate.get("underpowered", []),
         "per_class_recall": class_changes(base_report, cand_report),
+        "few_boxes_threshold": FEW_BOXES,
         "blocking_interval_level_percent": round(100 * gate["fail_ci_level"], 2),
         "review_interval_level_percent": round(100 * (1 - gate["alpha"]), 2),
     }

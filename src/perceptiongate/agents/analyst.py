@@ -25,11 +25,13 @@ not change it.
 Rules:
 - Use only numbers that appear in FACTS. Do not compute new numbers, do not round \
 differently, do not invent metrics. Changes are in percentage points ("points").
-- State the gate decision exactly as given (PASS, FAIL or NEEDS REVIEW).
+- The gate decision is already printed above your text. Do not contradict it.
 - Say which config change most likely explains the result, if FACTS lists one.
-- Mention real drops within tolerance: they passed, but they are not noise.
+- real_drops_within_tolerance are confirmed drops: their interval is entirely below
+  zero. They passed because they are small, NOT because they are noise. Never call them
+  noise.
 - If a check is listed as too noisy to decide, say a pass there is weak evidence.
-- Per-class numbers on few boxes (boxes_in_val under 200) are uncertain: say so.
+- Per-class numbers with boxes_in_val under few_boxes_threshold are uncertain: say so.
 - Use bullet points, never numbered lists. No headings other than the three below.
 - 120 to 220 words, in plain, direct English.
 
@@ -104,6 +106,10 @@ def deterministic_summary(facts: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def decision_line(facts: dict[str, Any]) -> str:
+    return f"**Gate decision: {facts['decision'].replace('_', ' ')}.** (written by code)"
+
+
 @dataclass
 class Explanation:
     text: str
@@ -138,7 +144,8 @@ def explain(facts: dict[str, Any], llm: LLM | None, max_attempts: int = 2) -> Ex
         )
         trace["attempts"].append(attempt)
         if grounding.ok:
-            return Explanation(reply.text.strip(), "llm", reply.model, grounding, trace)
+            text = f"{decision_line(facts)}\n\n{reply.text.strip()}"
+            return Explanation(text, "llm", reply.model, grounding, trace)
         problems = []
         if grounding.unverified:
             problems.append("these numbers are not in FACTS: " + ", ".join(grounding.unverified))
