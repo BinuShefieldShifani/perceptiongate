@@ -27,6 +27,10 @@ Rules:
 differently, do not invent metrics. Changes are in percentage points ("points").
 - The gate decision is already printed above your text. Do not contradict it.
 - Say which config change most likely explains the result, if FACTS lists one.
+- In "What happened", name the checks in blocking_failures: those decided the result.
+  If real_drops_within_tolerance is not empty, add one sentence saying those checks
+  passed, but the drops are real.
+- Do not restate allowed drops or thresholds: the gate table below your text has them.
 - real_drops_within_tolerance are confirmed drops: their interval is entirely below
   zero. They passed because they are small, NOT because they are noise. Never call them
   noise.

@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 6, analyst agent with local Ollama models. Built in public, one step at a time.
+> Status: step 7, PR-triggered runs: label a PR `train`, get a gated, explained result as a comment. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -182,6 +182,29 @@ First real case, short-25ep (half the training schedule): the gate failed it on 
 recall (−2.1 points) and small-object recall (−2.5). VRU recall also dropped 2.5 points.
 That is within the 3-point tolerance, so it passes, but the drop is real, and the
 report now shows it as "real drop, within tolerance" instead of a green tick.
+
+## From PR to comment
+```
+PR changes one config in configs/experiments/  +  label "train"
+  -> GitHub Actions pushes a Kaggle GPU job pinned to the PR's commit
+  -> Kaggle: train -> evaluate -> gate -> qwen2.5:14b writes the explanation
+  -> Actions downloads the outputs, comments on the PR, fails the check on a gate FAIL
+```
+See [ADR 0008](docs/adr/0008-pr-triggered-kaggle-runs.md). Runs queue one at a time.
+What agents are and aren't allowed to do here, and why:
+[docs/where-agents-should-not-go.md](docs/where-agents-should-not-go.md).
+
+### Gate calibration on real models
+| Candidate | What changed | Overall recall | VRU recall | Gate |
+|---|---|---:|---:|---|
+| short-25ep | half the training schedule | −2.1 pt | −2.5 pt (real, within tolerance) | ❌ FAIL |
+| seed7 | training seed only | −0.3 pt | −0.2 pt | ✅ PASS |
+
+A real change moved recall about 7× more than retraining with another seed, and the
+thresholds sit between the two. mAP50 dropped 1.3 points from the seed change alone,
+which is why mAP only asks for review. Rare classes (about 100 boxes each) moved 3 to 4
+points between seeds, so single-run per-class changes need several seeds before they mean
+much.
 
 ## Quick start
 ```bash
