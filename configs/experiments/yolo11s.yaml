@@ -1,5 +1,5 @@
 name: yolo11s
-description: First reference model. Every later run is compared against this one.
+description: YOLO11s again, now with paired latency against the baseline.
 
 data:
   manifest: manifests/bdd100k-v1
