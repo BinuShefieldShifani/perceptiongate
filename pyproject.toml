@@ -27,7 +27,7 @@ dev = [
     "pre-commit>=3.7",
 ]
 # Heavy groups are kept separate so CI lint/test jobs stay fast.
-train = ["ultralytics>=8.3"]
+train = ["ultralytics>=8.3", "onnx>=1.16", "onnxruntime>=1.18"]
 tracking = ["mlflow>=2.14"]
 agents = ["langgraph>=0.2", "langchain-core>=0.3"]
 
@@ -57,7 +57,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["torch", "torch.*", "ultralytics", "ultralytics.*", "mlflow", "mlflow.*", "PIL", "PIL.*"]
+module = ["torch", "torch.*", "ultralytics", "ultralytics.*", "mlflow", "mlflow.*", "PIL", "PIL.*", "onnxruntime", "onnxruntime.*", "onnx", "onnx.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

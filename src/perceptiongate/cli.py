@@ -264,7 +264,9 @@ def gate_cmd(
 
     pol = load_policy(policy)
     try:
-        result = run_gate(pol, pol.baseline / ARRAYS, candidate / ARRAYS)
+        result = run_gate(
+            pol, pol.baseline / ARRAYS, candidate / ARRAYS, candidate / "latency.json"
+        )
     except GateInputError as exc:
         typer.echo(f"GATE ERROR: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -272,6 +274,36 @@ def gate_cmd(
     typer.echo(to_markdown(result, name))
     if result["decision"] == FAIL or (strict and result["decision"] == REVIEW):
         raise typer.Exit(code=1)
+
+
+@app.command("benchmark")
+def benchmark_cmd(
+    config: Path = typer.Option(..., help="Experiment config YAML (image size)."),
+    baseline_weights: Path = typer.Option(..., help="Baseline best.pt."),
+    candidate_weights: Path = typer.Option(..., help="Candidate best.pt."),
+    dataset_dir: Path = typer.Option(..., help="YOLO dataset folder (uses images/val)."),
+    out: Path = typer.Option(..., help="Folder for latency.json."),
+    gpu_runs: int = typer.Option(200),
+    cpu_runs: int = typer.Option(30),
+) -> None:
+    """Latency of baseline and candidate, side by side in this session."""
+    from perceptiongate.evaluation.latency import benchmark_pair
+
+    cfg = load_config(config)
+    images = sorted((dataset_dir / "images" / "val").glob("*.jpg"))[:50]
+    if not images:
+        typer.echo(f"No val images in {dataset_dir}", err=True)
+        raise typer.Exit(code=1)
+    result = benchmark_pair(
+        baseline_weights, candidate_weights, images, cfg.data.image_size,
+        gpu_runs=gpu_runs, cpu_runs=cpu_runs,
+    )  # fmt: skip
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "latency.json").write_text(json.dumps(result, indent=2) + "\n")
+    for who in ("baseline", "candidate"):
+        r = result[who]
+        cpu = r.get("onnx_cpu", {}).get("median_ms", "n/a")
+        typer.echo(f"{who:9s} gpu {r['gpu']['median_ms']} ms  onnx-cpu {cpu} ms")
 
 
 @app.command("explain")

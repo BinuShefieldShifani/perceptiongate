@@ -38,6 +38,21 @@ def _check(r: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _latency_facts(lat: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not lat or lat.get("status") == "skipped":
+        return None
+    return {
+        "target": lat["target"],
+        "baseline_ms": lat["baseline_ms"],
+        "candidate_ms": lat["candidate_ms"],
+        "ratio": lat["ratio"],
+        "allowed_ratio": lat["max_ratio"],
+        "baseline_params_m": lat["baseline_params_m"],
+        "candidate_params_m": lat["candidate_params_m"],
+        "status": lat["status"],
+    }
+
+
 def config_changes(baseline_cfg: Path, candidate_cfg: Path | None) -> list[str]:
     if candidate_cfg is None:
         return []
@@ -96,6 +111,7 @@ def build_facts(
         "improvements": [_check(r) for r in gate["results"] if r["status"] == "improved"],
         "too_noisy_to_decide": gate.get("underpowered", []),
         "per_class_recall": class_changes(base_report, cand_report),
+        "latency": _latency_facts(gate.get("latency")),
         "few_boxes_threshold": FEW_BOXES,
         "blocking_interval_level_percent": round(100 * gate["fail_ci_level"], 2),
         "review_interval_level_percent": round(100 * (1 - gate["alpha"]), 2),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 from typing import Any
@@ -57,7 +58,44 @@ def rule_outcome(status: str, severity: str) -> str:
     return PASS
 
 
-def run_gate(policy: Policy, baseline_arrays: Path, candidate_arrays: Path) -> dict[str, Any]:
+def latency_check(policy: Policy, latency_path: Path | None) -> dict[str, Any] | None:
+    """Compare median latency of candidate and baseline from one paired measurement."""
+    rule = policy.latency
+    if rule is None:
+        return None
+    entry: dict[str, Any] = {"target": rule.target, "max_ratio": rule.max_ratio,
+                             "severity": rule.severity}  # fmt: skip
+    if latency_path is None or not latency_path.is_file():
+        entry.update(status="skipped", note="no latency.json for this run")
+        entry["outcome"] = PASS
+        return entry
+    data = json.loads(latency_path.read_text())
+    b, c = data["baseline"].get(rule.target), data["candidate"].get(rule.target)
+    if not data.get("same_session") or not b or not c:
+        entry.update(status="skipped", note="baseline and candidate not measured together")
+        entry["outcome"] = PASS
+        return entry
+    ratio = c["median_ms"] / b["median_ms"]
+    status = "regression" if ratio > rule.max_ratio else "improved" if ratio < 1 / 1.1 else "ok"
+    entry.update(
+        gpu=data.get("gpu"),
+        baseline_ms=b["median_ms"],
+        candidate_ms=c["median_ms"],
+        ratio=round(ratio, 2),
+        baseline_params_m=data["baseline"].get("params_m"),
+        candidate_params_m=data["candidate"].get("params_m"),
+        status=status,
+    )
+    entry["outcome"] = rule_outcome(status, rule.severity)
+    return entry
+
+
+def run_gate(
+    policy: Policy,
+    baseline_arrays: Path,
+    candidate_arrays: Path,
+    latency_path: Path | None = None,
+) -> dict[str, Any]:
     cfg = load_config(policy.data_config)
     base = MatchedArrays.load(str(baseline_arrays))
     cand = MatchedArrays.load(str(candidate_arrays))
@@ -113,7 +151,21 @@ def run_gate(policy: Policy, baseline_arrays: Path, candidate_arrays: Path) -> d
 
     failing = [r for r in results if r.get("outcome") == FAIL]
     review = [r for r in results if r.get("outcome") == REVIEW]
-    decision = FAIL if failing else REVIEW if review else PASS
+    latency = latency_check(policy, latency_path)
+    latency_reasons = []
+    if latency and latency["outcome"] != PASS:
+        latency_reasons.append(
+            f"latency ({latency['target']}): {latency['baseline_ms']} ms -> "
+            f"{latency['candidate_ms']} ms ({latency['ratio']}x, allowed {latency['max_ratio']}x) "
+            f"[latency, {latency['status']}]"
+        )
+    decision = (
+        FAIL
+        if failing or (latency and latency["outcome"] == FAIL)
+        else REVIEW
+        if review or (latency and latency["outcome"] == REVIEW)
+        else PASS
+    )
     return {
         "decision": decision,
         "policy": policy.name,
@@ -121,7 +173,8 @@ def run_gate(policy: Policy, baseline_arrays: Path, candidate_arrays: Path) -> d
         "alpha": policy.alpha,
         "n_fail_checks": n_fail,
         "fail_ci_level": round(1 - fail_alpha, 4),
-        "reasons": [_reason(r) for r in failing + review],
+        "reasons": [_reason(r) for r in failing + review] + latency_reasons,
+        "latency": latency,
         "improvements": [_reason(r) for r in results if r["status"] == "improved"],
         "confirmed_drops_within_tolerance": [
             _reason(r) for r in results if r["status"] == "within-tolerance"
@@ -178,6 +231,22 @@ def to_markdown(result: dict[str, Any], candidate_name: str = "candidate") -> st
             "threshold (noise floor > max_drop), so a pass there is weak evidence.",
             "",
         ]
+    lat = result.get("latency")
+    if lat and lat.get("status") != "skipped":
+        icon = ICONS.get(lat["status"], lat["status"])
+        lines += [
+            f"**Latency** ({lat['target']}, {lat['gpu']}, baseline and candidate measured in "
+            "the same session):",
+            "",
+            "| Model | Params (M) | Median latency (ms) | Ratio | Allowed | Result |",
+            "|---|---:|---:|---:|---:|---|",
+            f"| baseline | {lat['baseline_params_m']} | {lat['baseline_ms']} | 1.00 | | |",
+            f"| candidate | {lat['candidate_params_m']} | {lat['candidate_ms']} | "
+            f"{lat['ratio']:.2f} | {lat['max_ratio']:.2f} | {icon} |",
+            "",
+        ]
+    elif lat:
+        lines += [f"**Latency:** skipped ({lat['note']}).", ""]
     lines += [
         "| Rule | Metric | Slice | Baseline | Candidate | Δ [CI] | Noise floor | Result |",
         "|---|---|---|---:|---:|---|---:|---|",

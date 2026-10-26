@@ -31,6 +31,8 @@ differently, do not invent metrics. Changes are in percentage points ("points").
   If real_drops_within_tolerance is not empty, add one sentence saying those checks
   passed, but the drops are real.
 - Do not restate allowed drops or thresholds: the gate table below your text has them.
+- If FACTS has latency, say how accuracy changed against how speed changed: a model
+  that is better but slower is a trade-off for a person to decide, not a free win.
 - real_drops_within_tolerance are confirmed drops: their interval is entirely below
   zero. They passed because they are small, NOT because they are noise. Never call them
   noise.

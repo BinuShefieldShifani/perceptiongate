@@ -54,6 +54,12 @@ def main() -> int:
     p.add_argument("--no-eval", action="store_true", help="Skip the slice evaluation.")
     p.add_argument("--gate", action="store_true", help="Run the release gate after evaluation.")
     p.add_argument(
+        "--baseline-weights",
+        type=Path,
+        default=None,
+        help="Baseline best.pt: benchmark it next to the candidate (same session, same GPU).",
+    )
+    p.add_argument(
         "--agent-model",
         default=None,
         help="After the gate, write the PR comment with this local Ollama model "
@@ -107,6 +113,15 @@ def main() -> int:
              "--dataset-dir", str(dataset), "--out", str(out / "eval")]
         )  # fmt: skip
 
+    if args.baseline_weights and not args.no_eval:
+        # Latency is a bonus: a benchmark failure must not stop the gate.
+        subprocess.run(
+            [*pgate, "benchmark", "--config", args.config,
+             "--baseline-weights", str(args.baseline_weights),
+             "--candidate-weights", str(out / "model" / "best.pt"),
+             "--dataset-dir", str(dataset), "--out", str(out / "eval")],
+            check=False,
+        )  # fmt: skip
     if (args.gate or args.agent_model) and not args.no_eval:
         # Exit code 1 means FAIL, which is a result, not a crash: keep going.
         subprocess.run([*pgate, "gate", "--candidate", str(out / "eval"), "--name", cfg.name],

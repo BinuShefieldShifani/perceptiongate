@@ -72,3 +72,12 @@ rules:
     slices: [all]
     max_drop: 0.015
     severity: review
+
+# Latency of candidate vs baseline, measured side by side in the same Kaggle session
+# (scripts/kaggle_job.py attaches the baseline model to every run). A bigger model that
+# is more accurate but too slow goes to a person: the latency budget of the target
+# hardware is a product decision, not something the gate can know.
+latency:
+  target: gpu
+  max_ratio: 1.5
+  severity: review
