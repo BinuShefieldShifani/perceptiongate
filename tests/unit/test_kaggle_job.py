@@ -37,6 +37,8 @@ def test_build_writes_a_valid_pinned_kernel(tmp_path: Path) -> None:
     assert f"SHA = '{sha}'" in run
     assert "CONFIG = 'configs/experiments/seed7.yaml'" in run
     assert "AGENT_MODEL = 'qwen2.5:14b'" in run
+    assert "finally:" in run  # cleanup runs even when the pipeline fails
+    assert 'replace(".bin", ".tar")' in run  # the dataset keeps its real name
 
 
 def test_build_rejects_a_non_sha(tmp_path: Path) -> None:
@@ -68,6 +70,16 @@ def test_summary_reads_comment_and_decision(tmp_path: Path) -> None:
     assert str(s["body"]).startswith(kj.MARKER)
 
 
+def test_summary_shows_the_error_of_a_failed_job(tmp_path: Path) -> None:
+    (tmp_path / "result").mkdir()
+    (tmp_path / "result" / "FAILED.txt").write_text(
+        "Traceback...\nPREFLIGHT FAILED: dataset.yaml not found\n"
+    )
+    s = kj.summary(tmp_path, "x")
+    assert s["decision"] == "ERROR"
+    assert "PREFLIGHT FAILED" in str(s["body"])
+
+
 def test_summary_without_outputs_reports_error(tmp_path: Path) -> None:
     s = kj.summary(tmp_path, "x")
     assert s["decision"] == "ERROR"
@@ -82,3 +94,22 @@ def test_train_workflow_is_valid_yaml_and_guards_the_label() -> None:
     # Inputs reach shell steps through env vars only (no ${{ inputs }} inside run:).
     for step in job["steps"]:
         assert "${{ inputs" not in step.get("run", "")
+
+
+def test_unpack_path_does_not_depend_on_the_tar_file_name(tmp_path: Path) -> None:
+    """The real bug: data.tar holds bdd100k-v1-640/; the folder must come from the tar."""
+    import tarfile
+
+    from perceptiongate.data.prepare import unpack_dataset
+
+    src = tmp_path / "bdd100k-v1-640"
+    src.mkdir()
+    (src / "dataset.yaml").write_text("names: {0: car}\n")
+    tar = tmp_path / "data.tar"
+    with tarfile.open(tar, "w") as t:
+        t.add(src, arcname="bdd100k-v1-640")
+    ds = unpack_dataset(tar, tmp_path / "yolo")
+    assert ds == tmp_path / "yolo" / "bdd100k-v1-640" / "dataset.yaml"
+    assert ds.is_file()
+    train_script = (ROOT / "scripts" / "kaggle_train.py").read_text()
+    assert "removesuffix" not in train_script
