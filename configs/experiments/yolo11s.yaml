@@ -1,0 +1,29 @@
+name: yolo11s
+description: First reference model. Every later run is compared against this one.
+
+data:
+  manifest: manifests/bdd100k-v1
+  classes: [car, truck, bus, pedestrian, rider, bicycle, motorcycle, traffic_light, traffic_sign]
+  image_width: 1280
+  image_height: 720
+  image_size: 640
+  max_invalid_box_fraction: 0.005
+  sampling:
+    train_images: 10000
+    val_images: 2000
+    strata: [timeofday, weather]
+    min_per_stratum: 50
+    require_objects: true
+  seed: 42
+
+train:
+  weights: yolo11s.pt
+  epochs: 50
+  batch: 32
+  optimizer: SGD
+  lr0: 0.01
+  device: auto
+  workers: 4
+  amp: true
+  plots: true
+  seed: 42
