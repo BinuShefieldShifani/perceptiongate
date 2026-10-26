@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 5, release gate. Built in public, one step at a time.
+> Status: step 6, analyst agent with local Ollama models. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -152,6 +152,36 @@ can't resolve VRU changes under ~3 points, so the thresholds now say so.
 Two calibration runs check the gate on real models:
 `configs/experiments/short-25ep.yaml` (half the schedule, should FAIL) and
 `configs/experiments/seed7.yaml` (same config, other seed, should PASS).
+
+## Analyst agent
+```bash
+pgate gate    --candidate outputs/<run>/eval --name <run>
+pgate explain --candidate outputs/<run>/eval --name <run> \
+              --candidate-config configs/experiments/<run>.yaml
+```
+Writes `pr_comment.md`: the decision (from the gate), a three-part explanation, and the
+full gate table. The explanation comes from an LLM that only sees a fact sheet built by
+code, and every number it writes is checked against that sheet. A reply with a number
+that isn't there is retried once with the exact numbers named; after that, a code-written
+summary is used instead ([ADR 0007](docs/adr/0007-grounded-analyst-agent.md)).
+
+The agent runs on local open-weights models through Ollama: no API keys, and no data
+sent to a model provider. On Kaggle it uses the same T4 GPU as training:
+```bash
+python scripts/kaggle_agent.py --name short-25ep --models qwen2.5:7b,qwen2.5:14b
+python scripts/kaggle_train.py --config ... --prepared ... --agent-model qwen2.5:14b
+```
+`scripts/kaggle_agent.py` installs and starts Ollama, pulls the models, runs the gate
+and the agent once per model, and writes a comparison of grounding pass rate and
+latency. `PGATE_LLM_TIMEOUT` (default 300 s) covers slow CPU inference. Any
+OpenAI-compatible endpoint works the same way (`PGATE_LLM=openai`,
+`PGATE_LLM_BASE_URL`); `ANTHROPIC_API_KEY` is supported too. With no LLM, the comment
+uses the code-written summary.
+
+First real case, short-25ep (half the training schedule): the gate failed it on overall
+recall (−2.1 points) and small-object recall (−2.5). VRU recall also dropped 2.5 points.
+That is within the 3-point tolerance, so it passes, but the drop is real, and the
+report now shows it as "real drop, within tolerance" instead of a green tick.
 
 ## Quick start
 ```bash
