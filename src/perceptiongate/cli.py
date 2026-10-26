@@ -274,5 +274,40 @@ def gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("explain")
+def explain_cmd(
+    candidate: Path = typer.Option(..., help="Candidate eval folder (after `pgate gate`)."),
+    name: str = typer.Option("candidate", help="Candidate name."),
+    candidate_config: Path | None = typer.Option(None, help="Candidate experiment config."),
+    policy: Path = typer.Option(Path("configs/gate/policy.yaml")),
+    out: Path | None = typer.Option(None, help="Output folder; default: candidate."),
+) -> None:
+    """Write the PR comment: grounded LLM explanation (or code summary) + gate table."""
+    from perceptiongate.agents.analyst import explain, pr_comment
+    from perceptiongate.agents.facts import build_facts
+    from perceptiongate.agents.llm import make_llm
+    from perceptiongate.evaluation.run import REPORT
+    from perceptiongate.gate.policy import load_policy
+
+    pol = load_policy(policy)
+    gate = json.loads((candidate / "gate_result.json").read_text())
+    facts = build_facts(
+        gate,
+        json.loads((pol.baseline / REPORT).read_text()),
+        json.loads((candidate / REPORT).read_text()),
+        pol,
+        name,
+        candidate_config,
+    )
+    exp = explain(facts, make_llm())
+    dest = out or candidate
+    dest.mkdir(parents=True, exist_ok=True)
+    comment = pr_comment(facts, exp, (candidate / "gate_result.md").read_text())
+    (dest / "pr_comment.md").write_text(comment)
+    (dest / "agent_facts.json").write_text(json.dumps(facts, indent=2) + "\n")
+    (dest / "agent_trace.json").write_text(json.dumps(exp.trace, indent=2) + "\n")
+    typer.echo(comment)
+
+
 if __name__ == "__main__":
     app()

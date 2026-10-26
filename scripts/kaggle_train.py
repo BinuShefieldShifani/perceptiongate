@@ -7,7 +7,12 @@ Slow path (no prepared dataset yet): build the YOLO folder from raw BDD100K. Exp
 minutes of slow disk reads before training is fast.
     !python scripts/kaggle_train.py --epochs 3
 
-Outputs go to /kaggle/working/outputs/<experiment>, with the slice report in eval/.
+Full pipeline in one job (train, evaluate, gate, PR comment with a local Ollama model):
+    !python scripts/kaggle_train.py --config configs/experiments/<run>.yaml \
+        --prepared /kaggle/working/bdd100k-v1-640.tar --agent-model qwen2.5:14b
+
+Outputs go to /kaggle/working/outputs/<experiment>; eval/ holds the slice report, the
+gate result and pr_comment.md.
 """
 
 from __future__ import annotations
@@ -47,6 +52,13 @@ def main() -> int:
     p.add_argument("--work", type=Path, default=Path("/kaggle/working"))
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument("--no-eval", action="store_true", help="Skip the slice evaluation.")
+    p.add_argument("--gate", action="store_true", help="Run the release gate after evaluation.")
+    p.add_argument(
+        "--agent-model",
+        default=None,
+        help="After the gate, write the PR comment with this local Ollama model "
+        "(e.g. qwen2.5:14b). Implies --gate.",
+    )
     args = p.parse_args()
 
     sys.path.insert(0, "src")
@@ -88,6 +100,23 @@ def main() -> int:
             [*pgate, "evaluate", "--config", args.config,
              "--weights", str(out / "model" / "best.pt"),
              "--dataset-dir", str(dataset), "--out", str(out / "eval")]
+        )  # fmt: skip
+
+    if (args.gate or args.agent_model) and not args.no_eval:
+        # Exit code 1 means FAIL, which is a result, not a crash: keep going.
+        subprocess.run([*pgate, "gate", "--candidate", str(out / "eval"), "--name", cfg.name],
+                       check=False)  # fmt: skip
+    if args.agent_model and not args.no_eval:
+        import os
+
+        from perceptiongate.agents.ollama_server import ensure_ollama
+
+        print(ensure_ollama([args.agent_model], args.work / "ollama.log"), flush=True)
+        env = {**os.environ, "PGATE_LLM": "openai", "PGATE_LLM_MODEL": args.agent_model}
+        subprocess.run(
+            [*pgate, "explain", "--candidate", str(out / "eval"), "--name", cfg.name,
+             "--candidate-config", args.config],
+            check=True, env=env,
         )  # fmt: skip
 
     shutil.rmtree(out / "ultralytics" / "weights", ignore_errors=True)

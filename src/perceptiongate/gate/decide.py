@@ -27,11 +27,17 @@ def _r(x: float) -> float | None:
 
 def classify(delta: float, ci: tuple[float, float], max_drop: float) -> str:
     """regression: dropped more than allowed AND the interval says the drop is real.
-    possible-regression: dropped more than allowed, but it could still be noise."""
+    possible-regression: dropped more than allowed, but it could still be noise.
+    within-tolerance: the drop is real (interval below zero) but smaller than allowed.
+    It passes, and is shown separately so a confirmed drop never looks like "no change"."""
     if math.isnan(delta):
         return "no-data"
     if delta >= -max_drop:
-        return "improved" if not math.isnan(ci[0]) and ci[0] > 0 else "ok"
+        if not math.isnan(ci[0]) and ci[0] > 0:
+            return "improved"
+        if not math.isnan(ci[1]) and ci[1] < 0:
+            return "within-tolerance"  # a real drop, but smaller than max_drop
+        return "ok"
     if not math.isnan(ci[1]) and ci[1] < 0:
         return "regression"
     return "possible-regression"
@@ -117,6 +123,9 @@ def run_gate(policy: Policy, baseline_arrays: Path, candidate_arrays: Path) -> d
         "fail_ci_level": round(1 - fail_alpha, 4),
         "reasons": [_reason(r) for r in failing + review],
         "improvements": [_reason(r) for r in results if r["status"] == "improved"],
+        "confirmed_drops_within_tolerance": [
+            _reason(r) for r in results if r["status"] == "within-tolerance"
+        ],
         "underpowered": [f"{r['rule']}/{r['slice']}" for r in results if r.get("underpowered")],
         "results": results,
     }
@@ -133,6 +142,7 @@ def _reason(r: dict[str, Any]) -> str:
 
 ICONS = {
     "ok": "✅ ok",
+    "within-tolerance": "↘️ real drop, within tolerance",
     "improved": "⬆️ improved",
     "regression": "❌ regression",
     "possible-regression": "⚠️ possible",
@@ -152,6 +162,12 @@ def to_markdown(result: dict[str, Any], candidate_name: str = "candidate") -> st
              f"policy `{result['policy']}`.", "", note, ""]  # fmt: skip
     if result["reasons"]:
         lines += ["**Why:**", *[f"- {r}" for r in result["reasons"]], ""]
+    if result["confirmed_drops_within_tolerance"]:
+        lines += [
+            "**Real drops within tolerance** (passed, but not noise):",
+            *[f"- {r}" for r in result["confirmed_drops_within_tolerance"]],
+            "",
+        ]
     if result["improvements"]:
         lines += ["**Improved:**", *[f"- {r}" for r in result["improvements"]], ""]
     if result["underpowered"]:

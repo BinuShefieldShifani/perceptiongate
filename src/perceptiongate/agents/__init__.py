@@ -1,1 +1,1 @@
-"""agents package. Implemented in a later step."""
+"""Agents in the development cycle. They read pipeline outputs and advise; code decides."""
