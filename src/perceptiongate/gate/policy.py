@@ -38,6 +38,14 @@ class Rule(StrictModel):
         return v
 
 
+class LatencyRule(StrictModel):
+    """Candidate vs baseline latency, measured in the same session on the same GPU."""
+
+    target: Literal["gpu", "onnx_cpu"] = "gpu"
+    max_ratio: float = Field(gt=1.0)
+    severity: Literal["fail", "review"] = "review"
+
+
 class Resamples(StrictModel):
     recall: int = Field(default=2000, gt=0)
     map: int = Field(default=100, gt=0)
@@ -53,6 +61,7 @@ class Policy(StrictModel):
     alpha: float = Field(default=0.05, gt=0, lt=0.5)
     resamples: Resamples = Resamples()
     rules: list[Rule] = Field(min_length=1)
+    latency: LatencyRule | None = None
 
     @field_validator("rules")
     @classmethod

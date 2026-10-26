@@ -22,6 +22,7 @@ from pathlib import Path
 
 REPO_URL = "https://github.com/BinuShefieldShifani/perceptiongate.git"
 DATASET = "binushifani/perceptiongate-bdd100k-v1-640"
+BASELINE_MODEL = "binushifani/perceptiongate-baseline-bdd100k-v1"
 KERNEL_SLUG = "perceptiongate-run"
 AGENT_MODEL = "qwen2.5:14b"
 MARKER = "<!-- perceptiongate-comment -->"
@@ -54,8 +55,18 @@ try:
         raise RuntimeError(f"expected one prepared dataset .bin, found {{bins}}")
     tar = f"{{WORK}}/" + os.path.basename(bins[0]).replace(".bin", ".tar")
     shutil.copy(bins[0], tar)
+    extra = []
+    base = glob.glob("/kaggle/input/**/model/best.pt", recursive=True)
+    if not base:
+        for z in glob.glob("/kaggle/input/**/model.zip", recursive=True):
+            shutil.unpack_archive(z, f"{{WORK}}/baseline_model")
+        base = glob.glob(f"{{WORK}}/baseline_model/**/best.pt", recursive=True)
+    if base:
+        extra = ["--baseline-weights", base[0]]
+    else:
+        print("No baseline model attached: skipping the latency comparison", flush=True)
     sh(sys.executable, "scripts/kaggle_train.py", "--config", CONFIG,
-       "--prepared", tar, "--agent-model", AGENT_MODEL)
+       "--prepared", tar, "--agent-model", AGENT_MODEL, *extra)
 except Exception:
     failed = traceback.format_exc()
     print(failed, flush=True)
@@ -74,7 +85,7 @@ finally:
         with open(f"{{RESULT}}/FAILED.txt", "w") as fh:
             fh.write(failed)
     os.chdir(WORK)
-    for junk in ("yolo", "outputs", "repo"):
+    for junk in ("yolo", "outputs", "repo", "baseline_model"):
         shutil.rmtree(junk, ignore_errors=True)
     for f in glob.glob(f"{{WORK}}/*.tar"):
         os.remove(f)
@@ -119,7 +130,7 @@ def build(config: str, sha: str, user: str, out: Path, agent_model: str = AGENT_
         "is_private": True,
         "enable_gpu": True,
         "enable_internet": True,
-        "dataset_sources": [DATASET],
+        "dataset_sources": [DATASET, BASELINE_MODEL],
         "competition_sources": [],
         "kernel_sources": [],
     }

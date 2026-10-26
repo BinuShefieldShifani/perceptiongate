@@ -31,7 +31,7 @@ def test_build_writes_a_valid_pinned_kernel(tmp_path: Path) -> None:
     meta = json.loads((out / "kernel-metadata.json").read_text())
     assert meta["id"] == "someone/perceptiongate-run"
     assert meta["enable_gpu"] and meta["enable_internet"] and meta["is_private"]
-    assert meta["dataset_sources"] == [kj.DATASET]
+    assert meta["dataset_sources"] == [kj.DATASET, kj.BASELINE_MODEL]  # model for paired latency
     run = (out / "run.py").read_text()
     ast.parse(run)
     assert f"SHA = '{sha}'" in run

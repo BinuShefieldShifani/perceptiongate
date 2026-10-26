@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 7, PR-triggered runs: label a PR `train`, get a gated, explained result as a comment. Built in public, one step at a time.
+> Status: step 8, paired latency: every run benchmarks baseline and candidate side by side. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -193,6 +193,12 @@ PR changes one config in configs/experiments/  +  label "train"
 See [ADR 0008](docs/adr/0008-pr-triggered-kaggle-runs.md). Runs queue one at a time.
 What agents are and aren't allowed to do here, and why:
 [docs/where-agents-should-not-go.md](docs/where-agents-should-not-go.md).
+
+### Latency
+Every PR job also benchmarks the baseline and the candidate side by side, on the same GPU
+in the same session (GPU FP16 and ONNX Runtime on CPU). A candidate more than 1.5x slower
+than the baseline goes to review, whatever its accuracy
+([ADR 0009](docs/adr/0009-paired-latency.md)).
 
 ### Gate calibration on real models
 | Candidate | What changed | Overall recall | VRU recall | Gate |
