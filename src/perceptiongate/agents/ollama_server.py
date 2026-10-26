@@ -65,14 +65,31 @@ def pull(model: str, run: Runner = subprocess.run) -> float:
     return round(time.monotonic() - start_t, 1)
 
 
+def warm_up(model: str, url: str = DEFAULT_URL, timeout: float = 600) -> float:
+    """Load the model into memory with a tiny request, so the first real call isn't
+    timed with the load (9 GB into GPU memory took ~90 s on a T4)."""
+    start_t = time.monotonic()
+    body = json.dumps(
+        {"model": model, "prompt": "ok", "stream": False, "options": {"num_predict": 1}}
+    ).encode()
+    req = urllib.request.Request(
+        f"{url}/api/generate", data=body, headers={"content-type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        resp.read()
+    return round(time.monotonic() - start_t, 1)
+
+
 def ensure_ollama(models: list[str], log_path: Path = Path("ollama.log")) -> dict[str, object]:
-    """Install, start and pull. Returns timings for the run log."""
+    """Install, start, pull and warm up. Returns timings for the run log."""
     t0 = time.monotonic()
     install()
     version = start(log_path)
     pulls = {m: pull(m) for m in models}
+    warm = {m: warm_up(m) for m in models}
     return {
         "version": version,
         "pull_seconds": pulls,
+        "warmup_seconds": warm,
         "setup_seconds": round(time.monotonic() - t0, 1),
     }

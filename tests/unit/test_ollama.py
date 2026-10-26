@@ -122,6 +122,14 @@ def test_server_helpers(fake_server: str) -> None:
         ollama_server.wait_for_server("http://127.0.0.1:9", seconds=1)
 
 
+def test_warm_up_sends_a_tiny_generate_request(fake_server: str) -> None:
+    seconds = ollama_server.warm_up("qwen2.5:14b", url=fake_server)
+    assert seconds >= 0
+    sent = FakeOllama.requests[-1]
+    assert sent["model"] == "qwen2.5:14b"
+    assert sent["options"]["num_predict"] == 1
+
+
 def test_start_does_nothing_when_server_already_runs(fake_server: str, tmp_path: Path) -> None:
     assert ollama_server.start(tmp_path / "log", url=fake_server) == "0.0-test"
     assert not (tmp_path / "log").exists()  # no second server was launched

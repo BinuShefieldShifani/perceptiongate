@@ -31,6 +31,25 @@ On the short-25ep gate result, a faithful explanation passed with 14 of 14 numbe
 verified. A version adding "a relative loss of about 5.4%" (a plausible number the
 model computed itself) was rejected. "Safe to merge" on a FAIL was rejected.
 
+## First real run: what the trace showed
+qwen2.5:14b on Kaggle's T4, explaining the seed7 PASS. Both of its answers were
+rejected and the comment fell back to the code summary. The trace showed why:
+- Answer 2 was correct (9 of 9 numbers verified) and was rejected by two checker bugs:
+  it quoted the "200 boxes" threshold from the prompt, which was not in the facts, and
+  it wrote "passed the gate", which the check did not accept as stating PASS.
+- Answer 1 had a real error that the check missed: it called the confirmed drops
+  within tolerance "likely due to noise". Every number was right; the meaning was not.
+
+Changes:
+- Thresholds the prompt mentions are in the fact sheet.
+- The decision line is written by code. The check now asks the opposite question: does
+  the text claim a different decision for the gate, the candidate or the model?
+- A targeted meaning check: when the facts list confirmed drops, the text must not
+  dismiss them as noise.
+- The model is warmed up after pulling. The first call took 104 s, the retry 12 s;
+  the difference was loading 9 GB into GPU memory, not generating text.
+Both real answers are kept as regression tests (tests/unit/test_agent_regressions.py).
+
 ## Known limit
 The check proves each number comes from the facts, not that it sits next to the right
 metric. Writing the interval end (-2.4) as the recall change (-2.1) passes, because -2.4
