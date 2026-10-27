@@ -3,10 +3,11 @@
   "expect": {
     "decision": "PASS",
     "cause_keywords": [
-      "yolo11s",
       "backbone",
       "larger model",
-      "bigger model"
+      "bigger model",
+      "yolo11n",
+      "weights"
     ]
   },
   "facts": {

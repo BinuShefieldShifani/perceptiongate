@@ -169,8 +169,21 @@ def validate_proposal(
     if raw[section][field] == value:
         return None, f"{key} is already {value!r}"
     raw[section][field] = value
+    notes = []
+    if key == "data.image_size":
+        # Memory grows with the pixel count; keep it on a T4 by shrinking the batch.
+        scale = (float(str(value)) / cfg.data.image_size) ** 2
+        batch = max(8, int(cfg.train.batch / scale) // 8 * 8)
+        if batch != cfg.train.batch:
+            raw["train"]["batch"] = batch
+            notes.append(f"batch {cfg.train.batch} -> {batch} for the larger input")
+    if needs := rule.get("needs"):
+        notes.append(f"needs {needs}")
     raw["name"] = f"{cfg.name}-next"
-    raw["description"] = f"Proposed by the failure-mining agent: {prop.get('reason', '')}".strip()
+    reason = str(prop.get("reason", "")).strip()
+    raw["description"] = "Proposed by the failure-mining agent: " + "; ".join(
+        [reason, *notes]
+    ).strip("; ")
     try:
         return ExperimentConfig.model_validate(raw), ""
     except Exception as exc:  # noqa: BLE001
@@ -237,12 +250,20 @@ def to_markdown(report: dict[str, Any], result: dict[str, Any]) -> str:
     base = {r["value"]: r for r in b["by_size"]}
     for r in c["by_size"]:
         br = base.get(r["value"], {})
-        lines.append(f"| {r['value']} | {r['boxes']} | {r['recall']:.3f} | "
-                     f"{br.get('recall', 0):.3f} | {r['share_of_misses']:.1%} |")  # fmt: skip
+        cells = [
+            r["value"],
+            str(r["boxes"]),
+            f"{r['recall']:.3f}",
+            f"{br.get('recall', 0):.3f}",
+            f"{r['share_of_boxes']:.1%}",
+            f"{r['share_of_misses']:.1%}",
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    head = report["headline"] or ["none: misses spread in proportion to the boxes"]
     lines += [
         "",
-        "**Largest concentrations of misses:**",
-        *[f"- {h}" for h in report["headline"]],
+        "**Missed more often than their share of boxes explains:**",
+        *[f"- {h}" for h in head],
         "",
     ]
     p = result["proposal"]

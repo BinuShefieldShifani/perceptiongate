@@ -91,3 +91,25 @@ def test_app_renders_with_real_streamlit(tmp_path: Path) -> None:
     assert not app.exception, app.exception
     assert app.title[0].value == "PerceptionGate"
     assert any("short-25ep" in str(df.value) for df in app.dataframe)
+
+
+def test_small_slices_are_blank_and_regated_copies_are_dropped(tmp_path: Path) -> None:
+    ev = make_run(tmp_path, "short-25ep", "short-25ep", "FAIL", 0.340)
+    rep = json.loads((ev / "slice_report.json").read_text())
+    rep["slices"]["fog"] = {"n_images": 13, "vru_recall": {"value": 0.167}}
+    rep["slices"]["highway"]["n_images"] = 501
+    (ev / "slice_report.json").write_text(json.dumps(rep))
+    # A re-gated copy of the same evaluation, with no run_info of its own
+    copy = tmp_path / "agent-short-25ep" / "gate"
+    copy.mkdir(parents=True)
+    for f in ("gate_result.json", "gate_result.md", "slice_report.json"):
+        (copy / f).write_text((ev / f).read_text())
+    # Two separate trainings with identical numbers: both must stay
+    make_run(tmp_path, "y1", "yolo11s", "PASS", 0.448)
+    make_run(tmp_path, "y2", "yolo11s", "PASS", 0.448)
+    runs = discover(tmp_path)
+    names = sorted(r["run"] for r in runs)
+    assert names == ["short-25ep · short-25ep", "yolo11s · y1", "yolo11s · y2"]
+    short = next(r for r in runs if r["experiment"] == "short-25ep")
+    assert short["vru_by_slice"]["fog"] is None
+    assert short["vru_by_slice"]["highway"] == pytest.approx(0.240)

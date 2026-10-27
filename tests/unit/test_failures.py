@@ -161,3 +161,27 @@ def test_headline_ignores_volume_and_finds_real_concentration() -> None:
     lines = _headline(c)
     assert len(lines) == 1 and "16-32 px" in lines[0]
     assert not any("city street" in line for line in lines)
+
+
+def test_size_table_rows_have_as_many_cells_as_the_header() -> None:
+    """The real comment once had 6 header columns and 5 row cells, which shifted the
+    share of misses under 'Share of boxes'."""
+    r = report()
+    md = to_markdown(r, run_miner(r, BASELINE_CFG, None))
+    table = [line for line in md.splitlines() if line.startswith("| ")]
+    header, rows = table[0], table[1:]
+    assert len(rows) == len(r["candidate"]["by_size"])
+    for row in rows:
+        assert row.count("|") == header.count("|"), row
+    assert "Missed more often than their share of boxes explains" in md
+
+
+def test_image_size_proposal_scales_batch_and_states_its_need() -> None:
+    cfg, why = validate_proposal(
+        {"key": "data.image_size", "value": 960, "reason": "small objects"}, BASELINE_CFG
+    )
+    assert cfg is not None, why
+    assert cfg.data.image_size == 960
+    assert cfg.train.batch == 8  # 32 / (960/640)^2 = 14.2 -> multiple of 8, at least 8
+    assert "new prepared dataset" in cfg.description
+    assert "batch 32 -> 8" in cfg.description

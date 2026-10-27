@@ -74,3 +74,13 @@ def test_scores_show_retries_and_fallbacks() -> None:
 def test_no_llm_scores_zero_without_crashing() -> None:
     r = evaluate_agent(CASES, None)
     assert r["used_llm_text"] == 0.0 and r["model"] == "none"
+
+
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_cause_keywords_are_not_the_candidate_name(name: str) -> None:
+    """The yolo11s case once had 'yolo11s' as a cause keyword: any answer that named the
+    model 'named the cause', which made the score look better than it was."""
+    case = CASES[name]
+    candidate = case["facts"]["candidate"].lower()
+    for k in case["expect"]["cause_keywords"]:
+        assert k.lower() not in candidate and candidate not in k.lower()
