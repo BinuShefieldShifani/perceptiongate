@@ -138,6 +138,11 @@ def main() -> int:
              "--candidate-config", args.config],
             check=True, env=env,
         )  # fmt: skip
+        # Failure mining appends its section to the same PR comment. A bonus: never fatal.
+        subprocess.run(
+            [*pgate, "mine", "--candidate", str(out / "eval"), "--candidate-config", args.config],
+            check=False, env=env,
+        )  # fmt: skip
 
     shutil.rmtree(out / "ultralytics" / "weights", ignore_errors=True)
     print(f"\nOutputs: {out}")

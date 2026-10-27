@@ -56,13 +56,21 @@ def gpu_latency(
         model.predict(
             str(images[i % len(images)]), imgsz=image_size, device=device, half=half, verbose=False
         )
-    ms = []
+    total, infer = [], []
     for i in range(runs):
         r = model.predict(
             str(images[i % len(images)]), imgsz=image_size, device=device, half=half, verbose=False
         )[0]
-        ms.append(float(sum(r.speed.values())))
-    return {**_summary(ms), "device": device, "half": half}
+        total.append(float(sum(r.speed.values())))
+        infer.append(float(r.speed.get("inference", 0.0)))
+    # Per-image total is what one camera stream sees, but at batch 1 it is dominated by
+    # fixed pre/post-processing. Inference alone shows the model's own cost.
+    return {
+        **_summary(total),
+        "inference_median_ms": _summary(infer)["median_ms"],
+        "device": device,
+        "half": half,
+    }
 
 
 def onnx_cpu_latency(model: Any, image_size: int, runs: int, warmup: int) -> dict[str, Any]:
@@ -93,7 +101,17 @@ def benchmark_model(
     model_factory: ModelFactory | None = None,
     with_onnx: bool = True,
 ) -> dict[str, Any]:
-    model = (model_factory or _default_factory)(str(weights))
+    # ONNX export writes next to the weights. Kaggle inputs are read-only, so work on a
+    # writable copy (this is what made the baseline's CPU number fail on the first run).
+    import shutil
+    import tempfile
+
+    local = Path(tempfile.mkdtemp(prefix="bench-")) / Path(weights).name
+    if Path(weights).is_file():
+        shutil.copy(weights, local)
+    else:
+        local = Path(weights)
+    model = (model_factory or _default_factory)(str(local))
     out: dict[str, Any] = {"weights": str(weights)}
     with contextlib.suppress(AttributeError):
         out["params_m"] = round(sum(p.numel() for p in model.model.parameters()) / 1e6, 2)

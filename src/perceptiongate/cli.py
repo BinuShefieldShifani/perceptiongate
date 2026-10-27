@@ -276,6 +276,33 @@ def gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("mine")
+def mine_cmd(
+    candidate: Path = typer.Option(..., help="Candidate eval folder (eval_arrays.npz)."),
+    candidate_config: Path = typer.Option(..., help="Candidate experiment config."),
+    policy: Path = typer.Option(Path("configs/gate/policy.yaml")),
+    out: Path | None = typer.Option(None, help="Output folder; default: candidate."),
+) -> None:
+    """Failure mining: where VRU boxes are missed, and one validated next experiment."""
+    from perceptiongate.agents.failures import mine, run_miner, write_outputs
+    from perceptiongate.agents.llm import make_llm
+    from perceptiongate.data.manifest import read_rows
+    from perceptiongate.evaluation.matching import MatchedArrays
+    from perceptiongate.evaluation.run import ARRAYS
+    from perceptiongate.gate.policy import load_policy
+
+    pol = load_policy(policy)
+    data = load_config(pol.data_config).data
+    rows = {r.name: r for r in read_rows(data.manifest, "val")}
+    report = mine(
+        MatchedArrays.load(str(candidate / ARRAYS)),
+        MatchedArrays.load(str(pol.baseline / ARRAYS)),
+        rows, data.classes, data.image_width, data.image_height,
+    )  # fmt: skip
+    result = run_miner(report, load_config(candidate_config), make_llm())
+    typer.echo(write_outputs(out or candidate, report, result))
+
+
 @app.command("benchmark")
 def benchmark_cmd(
     config: Path = typer.Option(..., help="Experiment config YAML (image size)."),
