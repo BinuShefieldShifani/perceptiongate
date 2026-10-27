@@ -4,7 +4,58 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 10, agent evaluation in every run, and a dashboard. Built in public, one step at a time.
+> Status: complete. Built in one week, one step at a time, in public.
+
+## Results (real runs, Kaggle T4, October 2026)
+
+Every row below is a PR that changed one experiment config and got the `train` label.
+GitHub Actions ran the job on Kaggle; the decision and the comment came back on the PR.
+
+| Candidate | What changed | Overall recall | VRU recall | Small-object recall | CPU latency | Gate |
+|---|---|---:|---:|---:|---:|---|
+| short-25ep | half the training (25 epochs) | −2.1 pt | −2.5 pt | −2.5 pt | | ❌ FAIL |
+| seed7 | training seed only | −0.3 pt | −0.2 pt | −0.3 pt | | ✅ PASS |
+| yolo11s | bigger backbone (2.6 M → 9.4 M params) | +6.6 pt | +8.2 pt | +9.0 pt | 2.47× | ⚠️ NEEDS REVIEW |
+
+Baseline: YOLO11n, 50 epochs, 10k BDD100K training images, mAP50 0.405, overall recall
+0.563, VRU recall 0.366 (2,000-image frozen val set, confidence 0.25, IoU 0.5).
+
+**What the runs showed**
+
+- **The gate separates real changes from noise.** A real change moved recall about 7×
+  more than retraining with another seed, and the thresholds sit between the two. The
+  first version of the policy flagged 9 of 10 equal-quality models in simulation; after
+  setting thresholds from measured noise and a Bonferroni correction, 0 of 40.
+- **Pedestrian and cyclist detection is a small-object problem.** 65% of the VRU boxes
+  YOLO11s still misses are under 32 px. Under 16 px it finds 2.4%. The bigger model gained
+  about 10 points between 16 and 64 px and almost nothing under 16 px: at 640 input every
+  object is shrunk to half, and capacity doesn't help when the pixels aren't there. The
+  failure-mining agent proposed 960 input.
+- **Highway is the weakest slice and stayed weakest** (VRU recall 0.248 → 0.308, interval
+  still includes zero). Few vulnerable road users appear on highways, so this is a data
+  problem more than a model problem.
+- **mAP moved 1.3 points from the seed alone**, while recall stayed within ±0.3. That's why
+  mAP only asks for review.
+- **Training is reproducible.** Three separate YOLO11s trainings, from three commits on
+  three Kaggle sessions, gave identical recall, VRU, pedestrian and small-object numbers to
+  four decimals (same GPU type each time).
+- **The first latency rule measured the wrong thing.** 3.6× the parameters cost 4% on the
+  GPU per image (mostly fixed pre/post-processing at batch 1) and 2.5× on CPU. The gate now
+  checks both, and a slower-but-better model goes to a person.
+- **The analyst agent's safety net caught real mistakes.** A local qwen2.5:14b invented a
+  relative percentage, called confirmed drops "noise", and once wrote a correct explanation
+  with no numbers at all. Each became a check and a regression test. One gap is documented,
+  not closed: a correct number next to the wrong metric still passes.
+- **Getting data to the GPU was the first bottleneck.** Reading 12,000 images from Kaggle's
+  mounted dataset took about 45 minutes per run; packing them once into a tar made it seconds.
+
+![Dashboard](docs/images/dashboard.png)
+
+**Not done, and what I'd do next:** run the 960-input experiment (needs a new prepared
+dataset and batch 8, about 3–4 hours on a T4); failure mining on the missed image crops
+with a vision model; latency on the real deployment target (TensorRT or the embedded SoC)
+instead of the ONNX-on-CPU stand-in; more highway VRU examples in val; a baseline averaged
+over several seeds.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -263,6 +314,12 @@ kaggle/        Kaggle kernel metadata
 tests/
 docs/adr/      architecture decision records
 ```
+
+## Tracking
+Every run's record (commit, config and data hashes, metrics, epochs, a local MLflow
+store, LLM traces) travels with the run as an Actions artifact. Any MLflow server works
+by setting `MLFLOW_TRACKING_URI`; why there is no hosted server or Langfuse here:
+[ADR 0012](docs/adr/0012-tracking-and-traces.md).
 
 ## Data license
 BDD100K is released by UC Berkeley for non-commercial research and education. This repo

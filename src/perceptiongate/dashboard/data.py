@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+MIN_SLICE_IMAGES = 30  # same rule as the slice report: fewer images, no conclusions
+
 HEADLINE = [("overall-recall", "all", "recall"), ("vru-recall", "all", "VRU recall"),
             ("pedestrian-recall", "all", "pedestrian recall"),
             ("small-object-recall", "all", "small-object recall"),
@@ -51,7 +53,7 @@ def load_run(eval_dir: Path, root: Path) -> dict[str, Any]:
     for lat in lats:
         if lat.get("status") != "skipped":
             row[f"latency {lat.get('id', lat['target'])} (x)"] = lat.get("ratio")
-    row["vru_by_slice"] = {s: v["vru_recall"]["value"] for s, v in report.get("slices", {}).items()}
+    row["vru_by_slice"] = _vru_by_slice(report)
     row["gate_md"] = (
         (eval_dir / "gate_result.md").read_text() if (eval_dir / "gate_result.md").is_file() else ""
     )
@@ -60,11 +62,32 @@ def load_run(eval_dir: Path, root: Path) -> dict[str, Any]:
     return row
 
 
+def _vru_by_slice(report: dict[str, Any]) -> dict[str, Any]:
+    """VRU recall per slice; None where the slice has too few images to mean anything
+    (fog has 13), so the heatmap doesn't colour noise as a finding."""
+    return {
+        s: (v["vru_recall"]["value"] if v.get("n_images", MIN_SLICE_IMAGES) >= MIN_SLICE_IMAGES
+            else None)
+        for s, v in report.get("slices", {}).items()
+    }  # fmt: skip
+
+
+def _signature(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (row["experiment"], *(row.get(label) for _, _, label in HEADLINE))
+
+
 def discover(root: Path) -> list[dict[str, Any]]:
-    """Every run under root, newest folder first."""
+    """Every run under root, newest folder first.
+
+    A folder without its own run_info (commit) whose results equal a run that has one is
+    a re-gated copy of that run, not a new training, and is left out. Separate trainings
+    with identical numbers (a reproducibility check) all stay: each has its own commit.
+    """
     dirs = sorted({p.parent for p in root.rglob("gate_result.json")},
                   key=lambda p: p.stat().st_mtime, reverse=True)  # fmt: skip
-    return [load_run(d, root) for d in dirs]
+    runs = [load_run(d, root) for d in dirs]
+    with_commit = {_signature(r) for r in runs if r["commit"]}
+    return [r for r in runs if r["commit"] or _signature(r) not in with_commit]
 
 
 def baseline(baseline_dir: Path) -> dict[str, Any]:
@@ -76,7 +99,7 @@ def baseline(baseline_dir: Path) -> dict[str, Any]:
         "VRU recall": s.get("vru_recall", {}).get("value"),
         "small-object recall": s.get("small_recall", {}).get("value"),
         "mAP50": s.get("map50", {}).get("value"),
-        "vru_by_slice": {k: v["vru_recall"]["value"] for k, v in report.get("slices", {}).items()},
+        "vru_by_slice": _vru_by_slice(report),
     }
 
 

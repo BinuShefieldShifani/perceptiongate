@@ -3,7 +3,11 @@
   "expect": {
     "decision": "PASS",
     "cause_keywords": [
-      "seed"
+      "training seed",
+      "random seed",
+      "the seed",
+      "seed changed",
+      "seed from"
     ]
   },
   "facts": {

@@ -33,9 +33,14 @@ st.subheader("All runs")
 st.dataframe(pd.DataFrame(overview(runs, base)), use_container_width=True, hide_index=True)
 
 st.subheader("VRU recall by slice")
+st.caption("None: slice has fewer than 30 val images (fog has 13), too few to compare.")
 heat = pd.DataFrame(vru_heatmap(runs, base)).T
-st.dataframe(heat.style.background_gradient(cmap="RdYlGn", vmin=0.2, vmax=0.6).format("{:.3f}"),
-             use_container_width=True)  # fmt: skip
+st.dataframe(
+    heat.style.background_gradient(cmap="RdYlGn", vmin=0.2, vmax=0.6)
+    .format("{:.3f}", na_rep="")
+    .highlight_null(color="white"),
+    use_container_width=True,
+)
 
 st.subheader("Run details")
 choice = st.selectbox("Run", [r["run"] for r in runs])
