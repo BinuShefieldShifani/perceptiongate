@@ -38,19 +38,31 @@ def _check(r: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _latency_facts(lat: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not lat or lat.get("status") == "skipped":
-        return None
-    return {
-        "target": lat["target"],
-        "baseline_ms": lat["baseline_ms"],
-        "candidate_ms": lat["candidate_ms"],
-        "ratio": lat["ratio"],
-        "allowed_ratio": lat["max_ratio"],
-        "baseline_params_m": lat["baseline_params_m"],
-        "candidate_params_m": lat["candidate_params_m"],
-        "status": lat["status"],
-    }
+def _must_mention(gate: dict[str, Any]) -> list[float]:
+    """Headline changes the explanation has to state, in points: the blocking failures,
+    or, if nothing blocked, the two largest changes on blocking checks."""
+    fail_checks = [r for r in gate["results"] if r.get("severity") == "fail" and "delta" in r]
+    failing = [r for r in fail_checks if r.get("outcome") == "FAIL"]
+    pick = failing or sorted(fail_checks, key=lambda r: -abs(r["delta"] or 0))[:2]
+    return [p for r in pick if (p := _pts(r["delta"])) is not None and abs(p) >= 0.5]
+
+
+def _latency_facts(lats: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    return [
+        {
+            "check": lat["id"],
+            "measure": lat["target"],
+            "baseline_ms": lat["baseline_ms"],
+            "candidate_ms": lat["candidate_ms"],
+            "ratio": lat["ratio"],
+            "allowed_ratio": lat["max_ratio"],
+            "baseline_params_m": lat["baseline_params_m"],
+            "candidate_params_m": lat["candidate_params_m"],
+            "status": lat["status"],
+        }
+        for lat in (lats or [])
+        if lat.get("status") != "skipped"
+    ]
 
 
 def config_changes(baseline_cfg: Path, candidate_cfg: Path | None) -> list[str]:
@@ -111,6 +123,7 @@ def build_facts(
         "improvements": [_check(r) for r in gate["results"] if r["status"] == "improved"],
         "too_noisy_to_decide": gate.get("underpowered", []),
         "per_class_recall": class_changes(base_report, cand_report),
+        "must_mention": _must_mention(gate),
         "latency": _latency_facts(gate.get("latency")),
         "few_boxes_threshold": FEW_BOXES,
         "blocking_interval_level_percent": round(100 * gate["fail_ci_level"], 2),

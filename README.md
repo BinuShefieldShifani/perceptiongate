@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 8, paired latency: every run benchmarks baseline and candidate side by side. Built in public, one step at a time.
+> Status: step 9, failure-mining agent and paired latency (GPU and CPU). Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -194,11 +194,22 @@ See [ADR 0008](docs/adr/0008-pr-triggered-kaggle-runs.md). Runs queue one at a t
 What agents are and aren't allowed to do here, and why:
 [docs/where-agents-should-not-go.md](docs/where-agents-should-not-go.md).
 
+### Failure mining
+After the gate and the explanation, a second agent works out where the candidate still
+misses vulnerable road users (by size, condition and class, against the baseline) and
+proposes one next experiment from a fixed menu. Code validates the proposal and puts a
+ready-to-run config in the PR comment; a person decides whether to run it
+([ADR 0010](docs/adr/0010-failure-mining-agent.md)).
+
 ### Latency
 Every PR job also benchmarks the baseline and the candidate side by side, on the same GPU
-in the same session (GPU FP16 and ONNX Runtime on CPU). A candidate more than 1.5x slower
-than the baseline goes to review, whatever its accuracy
+in the same session. Two rules: GPU per image and ONNX Runtime on CPU; more than 1.5x
+slower than the baseline goes to review, whatever the accuracy
 ([ADR 0009](docs/adr/0009-paired-latency.md)).
+
+The first YOLO11s run showed why one measure isn't enough: 3.6x the parameters, but only
+3% slower per image on the T4 (11.37 -> 11.66 ms), because at batch 1 that time is mostly
+pre/post-processing. On CPU, YOLO11s took 144 ms per image.
 
 ### Gate calibration on real models
 | Candidate | What changed | Overall recall | VRU recall | Gate |
