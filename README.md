@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: step 9, failure-mining agent and paired latency (GPU and CPU). Built in public, one step at a time.
+> Status: step 10, agent evaluation in every run, and a dashboard. Built in public, one step at a time.
 
 ## Scope, honestly
 One public dataset subset (BDD100K), a small YOLO model, free GPU time on Kaggle. The
@@ -200,6 +200,20 @@ misses vulnerable road users (by size, condition and class, against the baseline
 proposes one next experiment from a fixed menu. Code validates the proposal and puts a
 ready-to-run config in the PR comment; a person decides whether to run it
 ([ADR 0010](docs/adr/0010-failure-mining-agent.md)).
+
+### Agent evaluation
+Every Kaggle job also runs the analyst on fixed cases from the three real runs and scores
+it: grounded on the first try, LLM text used, cause named
+([evals/agent](evals/agent/README.md), [ADR 0011](docs/adr/0011-agent-evaluation-in-the-pipeline.md)).
+
+### Dashboard
+```bash
+pip install -e ".[dashboard]"
+streamlit run src/perceptiongate/dashboard/app.py -- --runs ~/perceptiongate-runs
+```
+Point it at a folder of unzipped Actions artifacts: all runs side by side (decision,
+recall, VRU, small objects, mAP, latency ratios), VRU recall by slice, and per run the
+gate table, failure mining and agent evaluation.
 
 ### Latency
 Every PR job also benchmarks the baseline and the candidate side by side, on the same GPU

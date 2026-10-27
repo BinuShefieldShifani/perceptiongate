@@ -143,6 +143,11 @@ def main() -> int:
             [*pgate, "mine", "--candidate", str(out / "eval"), "--candidate-config", args.config],
             check=False, env=env,
         )  # fmt: skip
+        # Every run also regression-tests the agent on the fixed cases (Ollama is already up).
+        subprocess.run(
+            [*pgate, "agent-eval", "--out", str(out / "eval" / "agent_eval")],
+            check=False, env=env,
+        )  # fmt: skip
 
     shutil.rmtree(out / "ultralytics" / "weights", ignore_errors=True)
     print(f"\nOutputs: {out}")

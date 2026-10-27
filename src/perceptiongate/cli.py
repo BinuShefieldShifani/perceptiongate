@@ -276,6 +276,23 @@ def gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("agent-eval")
+def agent_eval_cmd(
+    cases: Path = typer.Option(Path("evals/agent/cases"), help="Folder of case JSON files."),
+    out: Path = typer.Option(..., help="Where to write agent_eval.json/.md."),
+) -> None:
+    """Score the analyst agent on fixed cases from real runs."""
+    from perceptiongate.agents.evaluate import evaluate_agent, load_cases, to_markdown
+    from perceptiongate.agents.llm import make_llm
+
+    result = evaluate_agent(load_cases(cases), make_llm())
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "agent_eval.json").write_text(json.dumps(result, indent=2) + "\n")
+    md = to_markdown(result)
+    (out / "agent_eval.md").write_text(md)
+    typer.echo(md)
+
+
 @app.command("mine")
 def mine_cmd(
     candidate: Path = typer.Option(..., help="Candidate eval folder (eval_arrays.npz)."),

@@ -59,15 +59,21 @@ def _groups(
 
 def _table(keys: Any, mask: Any, hit: Any, label: Callable[[Any], str]) -> list[dict[str, Any]]:
     total_missed = int((mask & ~hit).sum())
+    total_boxes = int(mask.sum())
     out = []
     for k in sorted(set(keys[mask].tolist()), key=str):
         m = mask & (keys == k)
         n, missed = int(m.sum()), int((m & ~hit).sum())
+        share_miss = missed / total_missed if total_missed else 0.0
+        share_box = n / total_boxes if total_boxes else 0.0
         out.append({
             "value": label(k),
             "boxes": n,
             "recall": round(float(hit[m].mean()), 3) if n else None,
-            "share_of_misses": round(missed / total_missed, 3) if total_missed else 0.0,
+            "share_of_boxes": round(share_box, 3),
+            "share_of_misses": round(share_miss, 3),
+            # >1: this group is missed more often than its size explains.
+            "over_representation": round(share_miss / share_box, 2) if share_box else 0.0,
         })  # fmt: skip
     return out
 
@@ -101,19 +107,25 @@ def mine(
     return report
 
 
+OVER_REPRESENTED = 1.2
+
+
 def _headline(c: dict[str, Any]) -> list[str]:
-    """Largest concentrations of misses, among groups with enough boxes to mean something."""
-    lines = []
-    for dim in ("by_size", "by_scene", "by_timeofday", "by_class"):
-        rows = [r for r in c[dim] if r["boxes"] >= MIN_BOXES]
-        if not rows:
-            continue
-        top = max(rows, key=lambda r: r["share_of_misses"])
-        lines.append(
-            f"{dim[3:]} '{top['value']}': {top['share_of_misses']:.1%} of missed VRU boxes, "
-            f"recall {top['recall']:.3f} on {top['boxes']} boxes"
-        )
-    return lines
+    """Groups missed more often than their size explains (share of misses / share of
+    boxes), among groups with enough boxes. A group with 90% of the boxes and 90% of the
+    misses is volume, not a weakness, and is left out."""
+    found = []
+    for dim in ("by_size", "by_scene", "by_timeofday", "by_weather", "by_class"):
+        for r in c[dim]:
+            if r["boxes"] >= MIN_BOXES and r["over_representation"] >= OVER_REPRESENTED:
+                found.append((r["over_representation"], dim, r))
+    found.sort(key=lambda t: -t[0])
+    return [
+        f"{dim[3:]} '{r['value']}': {r['share_of_misses']:.1%} of misses from "
+        f"{r['share_of_boxes']:.1%} of boxes ({r['over_representation']}x), recall "
+        f"{r['recall']:.3f} on {r['boxes']} boxes"
+        for _, dim, r in found[:4]
+    ]
 
 
 SYSTEM = """You analyse where a driving-perception detector misses vulnerable road users \
@@ -220,8 +232,8 @@ def to_markdown(report: dict[str, Any], result: dict[str, Any]) -> str:
              f"baseline {b['recall']:.3f}).", ""]  # fmt: skip
     if result["text"]:
         lines += [result["text"], ""]
-    lines += ["| Size (geometric mean side) | Boxes | Recall | Baseline | Share of misses |",
-              "|---|---:|---:|---:|---:|"]  # fmt: skip
+    lines += ["| Size (geometric mean side) | Boxes | Recall | Baseline | Share of boxes | "
+              "Share of misses |", "|---|---:|---:|---:|---:|---:|"]  # fmt: skip
     base = {r["value"]: r for r in b["by_size"]}
     for r in c["by_size"]:
         br = base.get(r["value"], {})
@@ -237,7 +249,7 @@ def to_markdown(report: dict[str, Any], result: dict[str, Any]) -> str:
     src = (
         "proposed by the agent, checked by code"
         if result["proposal_source"] == "llm"
-        else "rule-based proposal (no valid agent proposal)"
+        else "rule-based, no valid agent proposal"
     )
     lines += [
         f"**Suggested next experiment** ({src}): `{p['key']}: {p['value']}`. {p.get('reason', '')}"
