@@ -71,13 +71,24 @@ class GroundingResult:
         return not self.unverified and not self.contradictions
 
 
-def check_text(text: str, facts: dict[str, Any]) -> GroundingResult:
+def mentions(text: str, value: float) -> bool:
+    """Does the text contain this value, at its own precision (2.1 for 2.1 or -2.1)?"""
+    return any(_matches(m.group(), {abs(value)}) for m in NUMBER.finditer(text))
+
+
+def check_text(text: str, facts: dict[str, Any], require_decision: bool = True) -> GroundingResult:
     allowed = fact_values(facts)
     result = GroundingResult()
     for m in NUMBER.finditer(text):
         result.checked += 1
         if not _matches(m.group(), allowed):
             result.unverified.append(m.group())
+    # Completeness: a vague answer with no numbers is "grounded" but useless.
+    for v in facts.get("must_mention", []):
+        if not mentions(text, v):
+            result.contradictions.append(f"does not mention the headline change {abs(v)}")
+    if not require_decision:
+        return result
     decision = facts["decision"]
     # The decision line is written by code; the text must not claim a different one.
     # "passed" is fine on a FAIL when it describes a single check, so only claims about

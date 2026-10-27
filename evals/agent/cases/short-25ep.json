@@ -1,0 +1,165 @@
+{
+  "source": "real run: half the training schedule (Kaggle T4, Oct 2026)",
+  "expect": {
+    "decision": "FAIL",
+    "cause_keywords": [
+      "epoch",
+      "schedule"
+    ]
+  },
+  "facts": {
+    "candidate": "short-25ep",
+    "decision": "FAIL",
+    "config_changes": [
+      "train.epochs: 50 -> 25"
+    ],
+    "blocking_failures": [
+      {
+        "check": "overall-recall",
+        "metric": "recall",
+        "slice": "all",
+        "baseline": 0.563,
+        "candidate": 0.542,
+        "change_points": -2.1,
+        "interval_points": [
+          -2.4,
+          -1.7
+        ],
+        "allowed_drop_points": 1.0
+      },
+      {
+        "check": "small-object-recall",
+        "metric": "small_recall",
+        "slice": "all",
+        "baseline": 0.38,
+        "candidate": 0.354,
+        "change_points": -2.5,
+        "interval_points": [
+          -3.0,
+          -2.0
+        ],
+        "allowed_drop_points": 1.5
+      }
+    ],
+    "needs_review": [
+      {
+        "check": "recall-by-condition",
+        "metric": "recall",
+        "slice": "day",
+        "baseline": 0.561,
+        "candidate": 0.542,
+        "change_points": -1.9,
+        "interval_points": [
+          -2.3,
+          -1.5
+        ],
+        "allowed_drop_points": 1.5
+      },
+      {
+        "check": "recall-by-condition",
+        "metric": "recall",
+        "slice": "night",
+        "baseline": 0.573,
+        "candidate": 0.547,
+        "change_points": -2.6,
+        "interval_points": [
+          -3.1,
+          -2.0
+        ],
+        "allowed_drop_points": 1.5
+      },
+      {
+        "check": "recall-by-condition",
+        "metric": "recall",
+        "slice": "snow",
+        "baseline": 0.552,
+        "candidate": 0.523,
+        "change_points": -3.0,
+        "interval_points": [
+          -3.8,
+          -2.1
+        ],
+        "allowed_drop_points": 1.5
+      },
+      {
+        "check": "recall-by-condition",
+        "metric": "recall",
+        "slice": "highway",
+        "baseline": 0.537,
+        "candidate": 0.519,
+        "change_points": -1.9,
+        "interval_points": [
+          -2.5,
+          -1.2
+        ],
+        "allowed_drop_points": 1.5
+      }
+    ],
+    "real_drops_within_tolerance": [
+      {
+        "check": "vru-recall",
+        "metric": "vru_recall",
+        "slice": "all",
+        "baseline": 0.366,
+        "candidate": 0.34,
+        "change_points": -2.5,
+        "interval_points": [
+          -3.9,
+          -1.2
+        ],
+        "allowed_drop_points": 3.0
+      },
+      {
+        "check": "pedestrian-recall",
+        "metric": "recall:pedestrian",
+        "slice": "all",
+        "baseline": 0.387,
+        "candidate": 0.367,
+        "change_points": -2.0,
+        "interval_points": [
+          -3.5,
+          -0.4
+        ],
+        "allowed_drop_points": 3.0
+      }
+    ],
+    "improvements": [],
+    "too_noisy_to_decide": [
+      "vru-recall-by-condition/highway"
+    ],
+    "per_class_recall": {
+      "largest_drops": [
+        {
+          "class": "rider",
+          "baseline_recall": 0.29,
+          "candidate_recall": 0.217,
+          "change_points": -7.3,
+          "boxes_in_val": 124
+        },
+        {
+          "class": "bicycle",
+          "baseline_recall": 0.222,
+          "candidate_recall": 0.169,
+          "change_points": -5.3,
+          "boxes_in_val": 189
+        },
+        {
+          "class": "motorcycle",
+          "baseline_recall": 0.186,
+          "candidate_recall": 0.137,
+          "change_points": -4.9,
+          "boxes_in_val": 102
+        }
+      ],
+      "largest_gains": []
+    },
+    "must_mention": [
+      -2.1,
+      -2.5
+    ],
+    "latency": [],
+    "few_boxes_threshold": 200,
+    "blocking_interval_level_percent": 98.75,
+    "review_interval_level_percent": 95.0
+  }
+}

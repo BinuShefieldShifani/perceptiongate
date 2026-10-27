@@ -31,6 +31,7 @@ differently, do not invent metrics. Changes are in percentage points ("points").
   If real_drops_within_tolerance is not empty, add one sentence saying those checks
   passed, but the drops are real.
 - Do not restate allowed drops or thresholds: the gate table below your text has them.
+- State each change listed in must_mention, in points, next to its metric.
 - If FACTS has latency, say how accuracy changed against how speed changed: a model
   that is better but slower is a trade-off for a person to decide, not a free win.
 - real_drops_within_tolerance are confirmed drops: their interval is entirely below
@@ -90,6 +91,7 @@ def deterministic_summary(facts: dict[str, Any]) -> str:
         lines.append("- Config changes vs baseline: " + "; ".join(facts["config_changes"]) + ".")
     lines += [f"- Blocking: {_fmt_check(c)}" for c in facts["blocking_failures"]]
     lines += [f"- Needs review: {line}" for line in _grouped(facts["needs_review"])]
+    lines += [f"- Improved: {_fmt_check(c)}" for c in facts.get("improvements", [])[:4]]
     lines += ["", "**Why it matters**"]
     drops = facts["real_drops_within_tolerance"]
     lines += [f"- Real drop within tolerance: {_fmt_check(c)}" for c in drops]

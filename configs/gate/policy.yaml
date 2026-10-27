@@ -74,10 +74,19 @@ rules:
     severity: review
 
 # Latency of candidate vs baseline, measured side by side in the same Kaggle session
-# (scripts/kaggle_job.py attaches the baseline model to every run). A bigger model that
-# is more accurate but too slow goes to a person: the latency budget of the target
-# hardware is a product decision, not something the gate can know.
+# (scripts/kaggle_job.py attaches the baseline model to every run). Too slow goes to a
+# person, not to FAIL: the latency budget belongs to the deployment target.
+#
+# Two measures, because the first YOLO11s run showed one is not enough: at batch 1 on a
+# T4 the per-image GPU time (11.4 -> 11.7 ms) is dominated by fixed pre/post-processing,
+# so 3.6x the parameters looked almost free. ONNX Runtime on CPU is compute-bound and
+# shows the model's real cost, as a stand-in for an edge target.
 latency:
-  target: gpu
-  max_ratio: 1.5
-  severity: review
+  - id: gpu-per-image
+    target: gpu
+    max_ratio: 1.5
+    severity: review
+  - id: cpu-onnx
+    target: onnx_cpu
+    max_ratio: 1.5
+    severity: review

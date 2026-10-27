@@ -17,7 +17,7 @@ from perceptiongate.gate.compare import (
     paired_bootstrap,
     seed_for,
 )
-from perceptiongate.gate.policy import MAP_METRICS, Policy
+from perceptiongate.gate.policy import MAP_METRICS, LatencyRule, Policy
 
 PASS, FAIL, REVIEW = "PASS", "FAIL", "NEEDS_REVIEW"
 
@@ -58,29 +58,39 @@ def rule_outcome(status: str, severity: str) -> str:
     return PASS
 
 
-def latency_check(policy: Policy, latency_path: Path | None) -> dict[str, Any] | None:
-    """Compare median latency of candidate and baseline from one paired measurement."""
-    rule = policy.latency
-    if rule is None:
-        return None
-    entry: dict[str, Any] = {"target": rule.target, "max_ratio": rule.max_ratio,
+def _median(block: dict[str, Any], target: str) -> float | None:
+    if target == "gpu_inference":
+        v = block.get("gpu", {}).get("inference_median_ms")
+    else:
+        v = block.get(target, {}).get("median_ms")
+    return float(v) if v else None
+
+
+def latency_check(rule: LatencyRule, latency_path: Path | None) -> dict[str, Any]:
+    """Compare one latency measure of candidate and baseline from a paired measurement."""
+    entry: dict[str, Any] = {"id": rule.id, "target": rule.target, "max_ratio": rule.max_ratio,
                              "severity": rule.severity}  # fmt: skip
     if latency_path is None or not latency_path.is_file():
-        entry.update(status="skipped", note="no latency.json for this run")
-        entry["outcome"] = PASS
-        return entry
+        return {
+            **entry,
+            "status": "skipped",
+            "note": "no latency.json for this run",
+            "outcome": PASS,
+        }
     data = json.loads(latency_path.read_text())
-    b, c = data["baseline"].get(rule.target), data["candidate"].get(rule.target)
-    if not data.get("same_session") or not b or not c:
-        entry.update(status="skipped", note="baseline and candidate not measured together")
-        entry["outcome"] = PASS
-        return entry
-    ratio = c["median_ms"] / b["median_ms"]
+    b, c = _median(data["baseline"], rule.target), _median(data["candidate"], rule.target)
+    if not data.get("same_session") or b is None or c is None:
+        note = "not measured for both models in the same session"
+        for who in ("baseline", "candidate"):
+            if err := data[who].get("onnx_cpu_error"):
+                note += f"; {who}: {err[:80]}"
+        return {**entry, "status": "skipped", "note": note, "outcome": PASS}
+    ratio = c / b
     status = "regression" if ratio > rule.max_ratio else "improved" if ratio < 1 / 1.1 else "ok"
     entry.update(
         gpu=data.get("gpu"),
-        baseline_ms=b["median_ms"],
-        candidate_ms=c["median_ms"],
+        baseline_ms=round(b, 2),
+        candidate_ms=round(c, 2),
         ratio=round(ratio, 2),
         baseline_params_m=data["baseline"].get("params_m"),
         candidate_params_m=data["candidate"].get("params_m"),
@@ -151,20 +161,16 @@ def run_gate(
 
     failing = [r for r in results if r.get("outcome") == FAIL]
     review = [r for r in results if r.get("outcome") == REVIEW]
-    latency = latency_check(policy, latency_path)
-    latency_reasons = []
-    if latency and latency["outcome"] != PASS:
-        latency_reasons.append(
-            f"latency ({latency['target']}): {latency['baseline_ms']} ms -> "
-            f"{latency['candidate_ms']} ms ({latency['ratio']}x, allowed {latency['max_ratio']}x) "
-            f"[latency, {latency['status']}]"
-        )
+    latency = [latency_check(rule, latency_path) for rule in policy.latency]
+    latency_reasons = [
+        f"latency ({lat['target']}): {lat['baseline_ms']} ms -> {lat['candidate_ms']} ms "
+        f"({lat['ratio']}x, allowed {lat['max_ratio']}x) [{lat['id']}, {lat['status']}]"
+        for lat in latency
+        if lat["outcome"] != PASS
+    ]
+    outcomes = {lat["outcome"] for lat in latency}
     decision = (
-        FAIL
-        if failing or (latency and latency["outcome"] == FAIL)
-        else REVIEW
-        if review or (latency and latency["outcome"] == REVIEW)
-        else PASS
+        FAIL if failing or FAIL in outcomes else REVIEW if review or REVIEW in outcomes else PASS
     )
     return {
         "decision": decision,
@@ -231,22 +237,29 @@ def to_markdown(result: dict[str, Any], candidate_name: str = "candidate") -> st
             "threshold (noise floor > max_drop), so a pass there is weak evidence.",
             "",
         ]
-    lat = result.get("latency")
-    if lat and lat.get("status") != "skipped":
-        icon = ICONS.get(lat["status"], lat["status"])
+    lats = result.get("latency") or []
+    measured = [lat for lat in lats if lat.get("status") != "skipped"]
+    if measured:
         lines += [
-            f"**Latency** ({lat['target']}, {lat['gpu']}, baseline and candidate measured in "
-            "the same session):",
+            f"**Latency** ({measured[0]['gpu']}, baseline and candidate measured in the same "
+            "session):",
             "",
-            "| Model | Params (M) | Median latency (ms) | Ratio | Allowed | Result |",
-            "|---|---:|---:|---:|---:|---|",
-            f"| baseline | {lat['baseline_params_m']} | {lat['baseline_ms']} | 1.00 | | |",
-            f"| candidate | {lat['candidate_params_m']} | {lat['candidate_ms']} | "
-            f"{lat['ratio']:.2f} | {lat['max_ratio']:.2f} | {icon} |",
+            "| Check | Measure | Baseline (ms) | Candidate (ms) | Ratio | Allowed | Result |",
+            "|---|---|---:|---:|---:|---:|---|",
+        ]
+        for lat in measured:
+            lines.append(
+                f"| {lat['id']} | {lat['target']} | {lat['baseline_ms']} | {lat['candidate_ms']} | "
+                f"{lat['ratio']:.2f} | {lat['max_ratio']:.2f} | {ICONS.get(lat['status'], '')} |"
+            )
+        lines += [
+            f"\nParams: {measured[0]['baseline_params_m']} M -> "
+            f"{measured[0]['candidate_params_m']} M.",
             "",
         ]
-    elif lat:
-        lines += [f"**Latency:** skipped ({lat['note']}).", ""]
+    for lat in lats:
+        if lat.get("status") == "skipped":
+            lines += [f"**Latency `{lat['id']}`:** skipped ({lat['note']}).", ""]
     lines += [
         "| Rule | Metric | Slice | Baseline | Candidate | Δ [CI] | Noise floor | Result |",
         "|---|---|---|---:|---:|---|---:|---|",

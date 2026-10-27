@@ -9,6 +9,9 @@ Written after building it, from what actually happened on real runs.
 - **Say what probably caused a change.** The config diff is in the facts, so "the epochs
   went from 50 to 25" comes for free and is grounded.
 
+- **Propose the next experiment.** The failure-mining agent reads where the misses are
+  and picks one change from a fixed menu; code validates it and writes it as a config.
+
 ## Agents don't
 - **Decide whether a model ships.** The gate is deterministic code under a reviewed
   policy (ADR 0001, ADR 0006). The decision line in every comment is written by code, and
@@ -18,7 +21,8 @@ Written after building it, from what actually happened on real runs.
   produces one.
 - **Set thresholds.** Thresholds came from measured noise (simulation, then a real
   seed-to-seed run). An agent could suggest a change, but changing one is a reviewed PR.
-- **Start GPU runs on its own.** A person adds the `train` label. Runs cost quota and
+- **Start GPU runs on their own.** A proposal is a config file in a comment; a person
+  commits it and adds the `train` label. Runs cost quota and
   time; that budget belongs to a person.
 
 ## What the real runs taught
@@ -30,3 +34,8 @@ Written after building it, from what actually happened on real runs.
   the comment says which parts were written by code.
 - The checker itself was wrong twice on the first real run (too strict). Both real answers
   became regression tests. An agent's safety net needs the same testing as the agent.
+- A grounded answer can still be useless: one YOLO11s explanation contained no numbers
+  at all, and passed. The analyst now has to state the headline changes.
+- The first latency rule measured the wrong thing. At batch 1 on a T4, per-image GPU time
+  is mostly pre/post-processing, so a model with 3.6x the parameters looked 3% slower.
+  The rule now also checks ONNX on CPU, where the model's real cost shows.
