@@ -30,6 +30,7 @@ dev = [
 train = ["ultralytics>=8.3", "onnx>=1.16", "onnxruntime>=1.18"]
 tracking = ["mlflow>=2.14"]
 agents = ["langgraph>=0.2", "langchain-core>=0.3"]
+dashboard = ["streamlit>=1.36", "pandas>=2.2", "matplotlib>=3.8"]
 
 [project.scripts]
 pgate = "perceptiongate.cli:app"
@@ -57,7 +58,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["torch", "torch.*", "ultralytics", "ultralytics.*", "mlflow", "mlflow.*", "PIL", "PIL.*", "onnxruntime", "onnxruntime.*", "onnx", "onnx.*"]
+module = ["torch", "torch.*", "ultralytics", "ultralytics.*", "mlflow", "mlflow.*", "PIL", "PIL.*", "onnxruntime", "onnxruntime.*", "onnx", "onnx.*", "streamlit", "streamlit.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

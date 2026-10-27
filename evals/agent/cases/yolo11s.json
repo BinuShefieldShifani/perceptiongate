@@ -1,0 +1,116 @@
+{
+  "source": "real run: YOLO11s backbone instead of YOLO11n (Kaggle T4, Oct 2026)",
+  "expect": {
+    "decision": "PASS",
+    "cause_keywords": [
+      "yolo11s",
+      "backbone",
+      "larger model",
+      "bigger model"
+    ]
+  },
+  "facts": {
+    "candidate": "yolo11s",
+    "decision": "PASS",
+    "config_changes": [
+      "train.weights: yolo11n.pt -> yolo11s.pt"
+    ],
+    "blocking_failures": [],
+    "needs_review": [],
+    "real_drops_within_tolerance": [],
+    "improvements": [
+      {
+        "check": "overall-recall",
+        "metric": "recall",
+        "slice": "all",
+        "baseline": 0.563,
+        "candidate": 0.629,
+        "change_points": 6.6,
+        "interval_points": [
+          6.1,
+          7.1
+        ],
+        "allowed_drop_points": 1.0
+      },
+      {
+        "check": "vru-recall",
+        "metric": "vru_recall",
+        "slice": "all",
+        "baseline": 0.366,
+        "candidate": 0.448,
+        "change_points": 8.2,
+        "interval_points": [
+          6.5,
+          10.0
+        ],
+        "allowed_drop_points": 3.0
+      },
+      {
+        "check": "pedestrian-recall",
+        "metric": "recall:pedestrian",
+        "slice": "all",
+        "baseline": 0.387,
+        "candidate": 0.473,
+        "change_points": 8.6,
+        "interval_points": [
+          6.7,
+          10.4
+        ],
+        "allowed_drop_points": 3.0
+      },
+      {
+        "check": "small-object-recall",
+        "metric": "small_recall",
+        "slice": "all",
+        "baseline": 0.38,
+        "candidate": 0.47,
+        "change_points": 9.0,
+        "interval_points": [
+          8.3,
+          9.7
+        ],
+        "allowed_drop_points": 1.5
+      },
+      {
+        "check": "overall-map50",
+        "metric": "map50",
+        "slice": "all",
+        "baseline": 0.405,
+        "candidate": 0.47,
+        "change_points": 6.5,
+        "interval_points": [
+          5.1,
+          7.9
+        ],
+        "allowed_drop_points": 1.5
+      }
+    ],
+    "too_noisy_to_decide": [
+      "vru-recall-by-condition/highway"
+    ],
+    "per_class_recall": {
+      "largest_drops": [],
+      "largest_gains": []
+    },
+    "must_mention": [
+      9.0,
+      8.6
+    ],
+    "latency": [
+      {
+        "check": "gpu-per-image",
+        "measure": "gpu",
+        "baseline_ms": 11.37,
+        "candidate_ms": 11.66,
+        "ratio": 1.03,
+        "allowed_ratio": 1.5,
+        "baseline_params_m": 2.61,
+        "candidate_params_m": 9.43,
+        "status": "ok"
+      }
+    ],
+    "few_boxes_threshold": 200,
+    "blocking_interval_level_percent": 98.75,
+    "review_interval_level_percent": 95.0
+  }
+}

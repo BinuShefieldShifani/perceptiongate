@@ -140,3 +140,24 @@ def test_vague_answer_without_headline_numbers_is_rejected() -> None:
     assert any("9.0" in c for c in g.contradictions)
     better = YOLO11S_VAGUE + " Small-object recall rose 9.0 points and pedestrian recall 8.6."
     assert check_text(better, facts).ok
+
+
+def test_headline_ignores_volume_and_finds_real_concentration() -> None:
+    """Real numbers from the YOLO11s run: city street held 90% of VRU boxes and 89% of
+    misses (volume, not a weakness); 16-32 px held 37% of boxes and 48% of misses."""
+    from perceptiongate.agents.failures import _headline
+
+    def row(v: str, boxes: int, share_b: float, share_m: float, rec: float) -> dict[str, Any]:
+        ratio = round(share_m / share_b, 2)
+        return {"value": v, "boxes": boxes, "recall": rec, "share_of_boxes": share_b,
+                "share_of_misses": share_m, "over_representation": ratio}  # fmt: skip
+
+    c = {
+        "by_size": [row("16-32 px", 1106, 0.370, 0.482, 0.281),
+                    row("64-128 px", 432, 0.145, 0.071, 0.729)],
+        "by_scene": [row("city street", 2678, 0.896, 0.887, 0.454)],
+        "by_timeofday": [], "by_weather": [], "by_class": [],
+    }  # fmt: skip
+    lines = _headline(c)
+    assert len(lines) == 1 and "16-32 px" in lines[0]
+    assert not any("city street" in line for line in lines)
