@@ -4,7 +4,7 @@ CI/CD for a driving-perception object detector. Every change is trained, evaluat
 slice (night, rain, small objects, vulnerable road users), checked against a release
 policy, and explained by agents that also propose the next experiment.
 
-> Status: complete. Built in one week, one step at a time, in public.
+> Status: complete.
 
 ## Results (real runs, Kaggle T4, October 2026)
 
